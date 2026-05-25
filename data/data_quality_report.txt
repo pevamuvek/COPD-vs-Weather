@@ -1,0 +1,39 @@
+============================================================
+COPD ENVIRONMENTAL DATA — QUALITY REPORT
+Location : 1039 Budapest, Sarkadi Imre utca 6
+Period   : 2020-01-01 → 2026-05-18
+Total days: 2330
+============================================================
+
+Column                              Non-null  Missing%
+-------------------------------------------------------
+temperature_2m_max                      2330       0.0%
+temperature_2m_min                      2330       0.0%
+DTR                                     2330       0.0%
+surface_pressure_mean                   2330       0.0%
+delta_P                                 2329       0.0%
+dew_point_2m_mean                       2330       0.0%
+precipitation_sum                       2330       0.0%
+windspeed_10m_max                       2330       0.0%
+pm2_5                                   2330       0.0%
+pm10                                    2330       0.0%
+no2                                     2330       0.0%
+Kp_daily_max                               0     100.0%
+Kp_daily_mean                              0     100.0%
+pm2_5_roll3d                            2330       0.0%
+pm2_5_roll7d                            2330       0.0%
+pm2_5_roll14d                           2330       0.0%
+pm10_roll3d                             2330       0.0%
+pm10_roll7d                             2330       0.0%
+pm10_roll14d                            2330       0.0%
+no2_roll3d                              2330       0.0%
+no2_roll7d                              2330       0.0%
+no2_roll14d                             2330       0.0%
+Kp_daily_max_roll3d                        0     100.0%
+Kp_daily_max_roll7d                        0     100.0%
+Kp_daily_max_roll14d                       0     100.0%
+
+Notes:
+  delta_P row 0 is NaN by design (no prior day).
+  Kp NaN = GFZ source unavailable; add manually if needed.
+  Rolling windows use min_periods=1 to avoid leading NaNs.
