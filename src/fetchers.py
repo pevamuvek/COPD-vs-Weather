@@ -68,6 +68,39 @@ def fetch_air_quality(lat: float, lon: float, start: str, end: str) -> pd.DataFr
     return df_daily
 
 
+def fetch_weather_forecast(lat: float, lon: float, days: int = 3) -> pd.DataFrame:
+    """Daily weather forecast: extends today's data 1–2 days ahead."""
+    print("  → Fetching weather forecast from Open-Meteo…")
+    url = "https://api.open-meteo.com/v1/forecast"
+    params = {
+        "latitude":  lat,
+        "longitude": lon,
+        "daily": [
+            "temperature_2m_max",
+            "temperature_2m_min",
+            "surface_pressure_mean",
+            "dew_point_2m_mean",
+            "precipitation_sum",
+            "windspeed_10m_max",
+        ],
+        "forecast_days": days,
+        "timezone": "Europe/Budapest",
+    }
+    r = requests.get(url, params=params, timeout=60)
+    r.raise_for_status()
+    daily = r.json()["daily"]
+    df = pd.DataFrame(daily)
+    df["date"] = pd.to_datetime(df["time"])
+    df = df.drop(columns=["time"])
+
+    df["DTR"] = df["temperature_2m_max"] - df["temperature_2m_min"]
+    df["delta_P"] = df["surface_pressure_mean"].diff()
+    df["is_forecast"] = True
+
+    print(f"     Forecast rows: {len(df)}")
+    return df.set_index("date")
+
+
 def fetch_kp_index(start: str, end: str) -> pd.DataFrame:
     """Fetch 3-hourly Kp index and aggregate to daily max/mean."""
     print("  → Fetching Kp-index from GFZ Potsdam…")
@@ -132,9 +165,19 @@ def fetch_kp_index(start: str, end: str) -> pd.DataFrame:
 
 
 def add_rolling_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Add 3/7/14-day rolling means for pollution and Kp."""
+    """Add 3/7/14-day rolling means for pollution and Kp, plus lag columns for shock features."""
     cols = [c for c in ["pm2_5", "pm10", "no2", "Kp_daily_max"] if c in df.columns]
     for col in cols:
         for window in [3, 7, 14]:
             df[f"{col}_roll{window}d"] = df[col].rolling(window, min_periods=1).mean()
+
+    lag_features = {
+        "delta_P": [2, 5, 7, 14],
+        "DTR": [2, 7, 14],
+    }
+    for col, lags in lag_features.items():
+        if col in df.columns:
+            for lag in lags:
+                df[f"{col}_lag{lag}d"] = df[col].shift(lag)
+
     return df

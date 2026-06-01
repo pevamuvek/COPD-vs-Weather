@@ -24,8 +24,9 @@ Output
 ../data/data_quality_report.txt – coverage & missing value summary
 """
 
+import pandas as pd
 from config import LAT, LON, LOCATION_LABEL, START_DATE, END_DATE, OUTPUT_CSV, OUTPUT_REPORT
-from fetchers import fetch_weather, fetch_air_quality, fetch_kp_index, add_rolling_features
+from fetchers import fetch_weather, fetch_air_quality, fetch_weather_forecast, fetch_kp_index, add_rolling_features
 from report import quality_report
 
 
@@ -43,6 +44,10 @@ def main():
     print("\n  → Merging datasets (outer join on date)…")
     df = df_weather.join(df_aq, how="outer")
     df = df.join(df_kp, how="outer")
+
+    df_forecast = fetch_weather_forecast(LAT, LON)
+    df = pd.concat([df, df_forecast])
+    df = df[~df.index.duplicated(keep='first')]
 
     df = add_rolling_features(df)
     df.attrs['location_label'] = LOCATION_LABEL
