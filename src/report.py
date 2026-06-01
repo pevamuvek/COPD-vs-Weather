@@ -33,10 +33,12 @@ def quality_report(df, path):
         lines.append(f"Forecast rows: {forecast_rows}")
         lines.append("")
         
-        # Get today onwards (last 3 rows by date, or fewer if unavailable)
-        df_sorted = df.sort_index()
-        today_idx = max(0, len(df_sorted) - 3)
-        df_forecast_view = df_sorted.iloc[today_idx:]
+        df_forecast_view = df.loc[df.get("is_forecast", False) == True].sort_index()
+        if len(df_forecast_view) == 0:
+            df_sorted = df.sort_index()
+            df_forecast_view = df_sorted.iloc[-3:]
+        else:
+            df_forecast_view = df_forecast_view.head(3)
         
         if len(df_forecast_view) > 0:
             lines.append(f"{'Date':<12} {'Risk score':>12} {'Tier':>10}")
@@ -44,7 +46,7 @@ def quality_report(df, path):
             for date, row in df_forecast_view.iterrows():
                 score_str = f"{row['risk_score']:.2f}" if pd.notna(row['risk_score']) else "NaN"
                 tier_str = str(row.get('risk_tier', 'N/A'))
-                lines.append(f"{date.date()!s:<12} {score_str:>12} {tier_str:>10}")
+                lines.append(f"{date.date():<12} {score_str:>12} {tier_str:>10}")
             
             # Identify primary driver on peak day
             peak_day = df_forecast_view.loc[df_forecast_view['risk_score'].idxmax()]

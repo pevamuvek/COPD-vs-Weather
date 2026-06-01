@@ -61,8 +61,9 @@ def main():
         "pm2_5", "pm10", "no2",
         "Kp_daily_max", "Kp_daily_mean",
     ]
+    score_cols = [c for c in ["risk_score", "risk_tier", "risk_label", "is_forecast"] if c in df.columns]
     roll_cols = [c for c in df.columns if "roll" in c]
-    df = df[[c for c in base_cols if c in df.columns] + roll_cols]
+    df = df[[c for c in base_cols if c in df.columns] + score_cols + roll_cols]
 
     df.index.name = "date"
     df.to_csv(OUTPUT_CSV)

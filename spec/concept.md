@@ -35,7 +35,7 @@ The pipeline is designed to capture environmental stressors that matter for resp
 - `ΔP` (barometric pressure change over 24 hours) as a pressure shock indicator
 - `DTR` (diurnal temperature range) to reflect temperature fluctuation stress
 - dew point to capture humid heat and thermal comfort effects
--  - rolling averages over 3, 7, and 14 days applied to pollution and geomagnetic indicators; explicit lag columns for pressure and temperature shocks
+- rolling averages over 3, 7, and 14 days applied to pollution and geomagnetic indicators; explicit lag columns for pressure and temperature shocks
 - air pollution indicators for PM2.5, PM10, and NO₂
 - daily Kp-derived geomagnetic activity summaries to test secondary stressor hypotheses
 
