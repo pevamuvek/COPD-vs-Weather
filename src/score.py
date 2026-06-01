@@ -35,7 +35,10 @@ def compute_risk_score(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     
     # Separate historical from forecast for baseline normalization
-    is_hist = ~df.get("is_forecast", False)
+    if "is_forecast" in df.columns:
+        is_hist = ~df["is_forecast"].astype(bool)
+    else:
+        is_hist = pd.Series(True, index=df.index)
     
     # Initialize result columns
     risk_scores = []
