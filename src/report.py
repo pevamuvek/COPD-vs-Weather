@@ -48,40 +48,44 @@ def quality_report(df, path):
                 tier_str = str(row.get('risk_tier', 'N/A'))
                 lines.append(f"{date.date():<12} {score_str:>12} {tier_str:>10}")
             
-            # Identify primary driver on peak day
-            peak_day = df_forecast_view.loc[df_forecast_view['risk_score'].idxmax()]
-            peak_score = peak_day['risk_score']
-            
-            if pd.notna(peak_score):
-                # Recompute normalized components to find the highest contributor
-                peak_features = {}
-                is_hist = ~df.get("is_forecast", False)
+            valid_scores = df_forecast_view['risk_score'].dropna()
+            if len(valid_scores) > 0:
+                # Identify primary driver on peak day
+                peak_day = df_forecast_view.loc[valid_scores.idxmax()]
+                peak_score = peak_day['risk_score']
                 
-                for feature, weight in RISK_WEIGHTS.items():
-                    if feature not in df.columns or pd.isna(peak_day[feature]):
-                        continue
+                if pd.notna(peak_score):
+                    # Recompute normalized components to find the highest contributor
+                    peak_features = {}
+                    is_hist = ~df.get("is_forecast", False)
                     
-                    value = abs(peak_day[feature]) if feature == "delta_P" else peak_day[feature]
-                    hist_values = df.loc[is_hist, feature].copy()
-                    if feature == "delta_P":
-                        hist_values = hist_values.abs()
+                    for feature, weight in RISK_WEIGHTS.items():
+                        if feature not in df.columns or pd.isna(peak_day[feature]):
+                            continue
+                        
+                        value = abs(peak_day[feature]) if feature == "delta_P" else peak_day[feature]
+                        hist_values = df.loc[is_hist, feature].copy()
+                        if feature == "delta_P":
+                            hist_values = hist_values.abs()
+                        
+                        if len(hist_values) > 0 and not hist_values.isna().all():
+                            hist_min = hist_values.min()
+                            hist_max = hist_values.max()
+                            if hist_max != hist_min:
+                                normalized = (value - hist_min) / (hist_max - hist_min)
+                                normalized = min(1.0, max(0.0, normalized))
+                                peak_features[feature] = normalized * weight
                     
-                    if len(hist_values) > 0 and not hist_values.isna().all():
-                        hist_min = hist_values.min()
-                        hist_max = hist_values.max()
-                        if hist_max != hist_min:
-                            normalized = (value - hist_min) / (hist_max - hist_min)
-                            normalized = min(1.0, max(0.0, normalized))
-                            peak_features[feature] = normalized * weight
-                
-                if peak_features:
-                    top_driver = max(peak_features, key=peak_features.get)
-                    driver_value = peak_day[top_driver]
-                    
-                    if top_driver == "delta_P":
-                        lines.append(f"\nElevated risk expected. Pressure change of {driver_value:.1f} hPa is the primary driver.")
-                    else:
-                        lines.append(f"\nElevated risk expected. {top_driver} = {driver_value:.1f} is the primary driver.")
+                    if peak_features:
+                        top_driver = max(peak_features, key=peak_features.get)
+                        driver_value = peak_day[top_driver]
+                        
+                        if top_driver == "delta_P":
+                            lines.append(f"\nElevated risk expected. Pressure change of {driver_value:.1f} hPa is the primary driver.")
+                        else:
+                            lines.append(f"\nElevated risk expected. {top_driver} = {driver_value:.1f} is the primary driver.")
+            else:
+                lines.append("\nNo valid forecast risk score is available for the selected days.")
 
     report = "\n".join(lines)
     print("\n" + report)
