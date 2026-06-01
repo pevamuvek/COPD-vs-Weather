@@ -28,6 +28,7 @@ import pandas as pd
 from config import LAT, LON, LOCATION_LABEL, START_DATE, END_DATE, OUTPUT_CSV, OUTPUT_REPORT
 from fetchers import fetch_weather, fetch_air_quality, fetch_weather_forecast, fetch_kp_index, add_rolling_features
 from report import quality_report
+from score import compute_risk_score
 
 
 def main():
@@ -50,6 +51,7 @@ def main():
     df = df[~df.index.duplicated(keep='first')]
 
     df = add_rolling_features(df)
+    df = compute_risk_score(df)
     df.attrs['location_label'] = LOCATION_LABEL
 
     base_cols = [
