@@ -26,7 +26,7 @@ The merged dataset is intended to support later COPD risk modeling and event-win
 ## Imports
 
 - From `config`: `LAT`, `LON`, `LOCATION_LABEL`, `START_DATE`, `END_DATE`, `OUTPUT_CSV`, `OUTPUT_REPORT`
-- From `fetchers`: `fetch_weather`, `fetch_air_quality`, `fetch_kp_index`, `add_rolling_features`
+- From `fetchers`: `fetch_weather`, `fetch_air_quality`, `fetch_weather_forecast`, `fetch_kp_index`, `add_rolling_features`
 - From `report`: `quality_report`
 
 ## Behavior
