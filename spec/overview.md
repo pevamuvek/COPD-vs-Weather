@@ -27,23 +27,3 @@ The regenerated project must include the following files:
 
 The runtime output directory is created under `data/` relative to the repository root.
 
-## Navigation
-
-- [Concept](concept.md)
-- [Config](config.md)
-- [Fetchers](fetchers.md)
-- [Main](main.md)
-- [Report](report.md)
-- [Dependencies](dependencies.md)
-
-## Project structure
-
-The regenerated project must include the following files:
-
-- `code/__init__.py`
-- `code/config.py`
-- `code/fetchers.py`
-- `code/report.py`
-- `code/main.py`
-
-The runtime output directory is created under `data/` relative to the repository root.

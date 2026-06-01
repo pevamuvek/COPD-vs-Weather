@@ -6,7 +6,7 @@ This document explains the project purpose and design without referring to imple
 
 The `copd-vs-weather` project is a reproducible environmental data pipeline for a COPD risk analysis study anchored on a single patient location in Budapest.
 
-It is designed to collect and organize daily environmental exposures, not to perform modeling itself. The resulting dataset is intended to support later clinical risk analysis, event window labeling, and machine learning.
+It is designed to collect and organise daily environmental exposures and compute a transparent daily risk score. It does not perform statistical modeling or machine learning; the risk score is a weighted index intended for human review. The resulting dataset is intended to support later clinical risk analysis, event window labeling, and machine learning.
 
 ## Data sources and structure
 
@@ -35,7 +35,7 @@ The pipeline is designed to capture environmental stressors that matter for resp
 - `ΔP` (barometric pressure change over 24 hours) as a pressure shock indicator
 - `DTR` (diurnal temperature range) to reflect temperature fluctuation stress
 - dew point to capture humid heat and thermal comfort effects
-- rolling averages over 3, 7, and 14 days to measure cumulative exposure
+-  - rolling averages over 3, 7, and 14 days applied to pollution and geomagnetic indicators; explicit lag columns for pressure and temperature shocks
 - air pollution indicators for PM2.5, PM10, and NO₂
 - daily Kp-derived geomagnetic activity summaries to test secondary stressor hypotheses
 

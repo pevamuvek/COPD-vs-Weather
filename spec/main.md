@@ -20,7 +20,7 @@ The merged dataset is intended to support later COPD risk modeling and event-win
 
 - create labels for hospitalization risk windows (event day plus two prior days)
 - preserve all calendar days so non-event periods are available for comparison
-- support later clinical cofactors such as `viral_cofactor` and uncertain event flags
+- preserve all calendar days so non-event periods are available for model training
 - provide a reproducible foundation for Random Forest / XGBoost modeling and bootstrap validation
 
 ## Imports
