@@ -1,3 +1,45 @@
+import pandas as pd
+import numpy as np
+from score import RISK_WEIGHTS
+
+def historical_context(df: pd.DataFrame) -> list[str]:
+    """Generate historical baseline stats for forecast comparison."""
+    lines = []
+    
+    # Filter historical rows only, drop forecast
+    hist = df[~df["is_forecast"].fillna(False).astype(bool)].copy()
+    hist = hist[pd.notna(hist["risk_score"])]
+    
+    if len(hist) == 0:
+        return ["No historical risk scores available for context."]
+    
+    # Last 30 and 90 days
+    last_30 = hist.tail(30)
+    last_90 = hist.tail(90)
+    
+    avg_30 = last_30["risk_score"].mean()
+    avg_90 = last_90["risk_score"].mean()
+    
+    max_30_score = last_30["risk_score"].max()
+    max_30_date = last_30["risk_score"].idxmax()
+    
+    mod_plus_30 = (last_30["risk_score"] >= 0.34).sum()
+    mod_plus_90 = (last_90["risk_score"] >= 0.34).sum()
+    
+    def tier(score):
+        if score < 0.34: return "low"
+        elif score <= 0.66: return "moderate"
+        else: return "high"
+    
+    lines.append("HISTORICAL CONTEXT")
+    lines.append("-" * 35)
+    lines.append(f"30-day avg  : {avg_30:.2f} ({tier(avg_30)})")
+    lines.append(f"90-day avg  : {avg_90:.2f} ({tier(avg_90)})")
+    lines.append(f"Recent high : {max_30_score:.2f} on {str(max_30_date.date())}")
+    lines.append(f"Moderate+   : {mod_plus_30}/30 days last month, {mod_plus_90}/90 last quarter")
+    lines.append("")
+    
+    return lines
 def quality_report(df, path):
     lines = []
     lines.append("=" * 60)
@@ -19,11 +61,16 @@ def quality_report(df, path):
     lines.append("  Kp NaN = GFZ source unavailable; add manually if needed.")
     lines.append("  Rolling windows use min_periods=1 to avoid leading NaNs.")
 
+    # Compute 30-day mean for trend arrows
+    hist = df[~df["is_forecast"].fillna(False).astype(bool)]
+    hist = hist[pd.notna(hist["risk_score"])]
+    hist_scores_mean = hist.tail(30)["risk_score"].mean()
+
+    # Add historical context block
+    lines += historical_context(df)
+    
     # Forecast and risk summary
     if "risk_score" in df.columns:
-        import pandas as pd
-        from score import RISK_WEIGHTS
-        import numpy as np
         
         lines.append("")
         lines.append("FORECAST AND RISK SUMMARY")
@@ -46,7 +93,34 @@ def quality_report(df, path):
             for date, row in df_forecast_view.iterrows():
                 score_str = f"{row['risk_score']:.2f}" if pd.notna(row['risk_score']) else "NaN"
                 tier_str = str(row.get('risk_tier', 'N/A'))
-                lines.append(f"{date.date():<12} {score_str:>12} {tier_str:>10}")
+                avg_30 = hist_scores_mean
+                if pd.notna(row['risk_score']):
+                    if row['risk_score'] > avg_30 + 0.05:
+                        trend = "↑"
+                    elif row['risk_score'] < avg_30 - 0.05:
+                        trend = "↓"
+                    else:
+                        trend = "→"
+                else:
+                    trend = ""
+                lines.append(f"{str(date.date()):<12} {score_str:>12} {tier_str:>10}  {trend}")
+            
+            # Display data coverage notes for forecast rows
+            if "missing_features_log" in df.attrs:
+                missing_features_log = df.attrs["missing_features_log"]
+                lines.append("")
+                lines.append("Data coverage (forecast rows):")
+                
+                # Get indices of forecast rows in the original dataframe
+                forecast_indices = df[df.get("is_forecast", False) == True].index.tolist()
+                for date, idx_in_view in zip(df_forecast_view.index, df_forecast_view.index):
+                    # Find position of this date in the full dataframe
+                    pos_in_full_df = df.index.get_loc(date)
+                    if pos_in_full_df < len(missing_features_log):
+                        missing = missing_features_log[pos_in_full_df]
+                        if missing:
+                            available = [f for f in RISK_WEIGHTS.keys() if f not in missing]
+                            lines.append(f"  {date.date()}: scored on {', '.join(available) if available else 'no features'} ({', '.join(missing)} unavailable)")
             
             valid_scores = df_forecast_view['risk_score'].dropna()
             if len(valid_scores) > 0:
@@ -57,7 +131,7 @@ def quality_report(df, path):
                 if pd.notna(peak_score):
                     # Recompute normalized components to find the highest contributor
                     peak_features = {}
-                    is_hist = ~df.get("is_forecast", False)
+                    is_hist = ~df["is_forecast"].fillna(False).astype(bool)
                     
                     for feature, weight in RISK_WEIGHTS.items():
                         if feature not in df.columns or pd.isna(peak_day[feature]):
