@@ -62,9 +62,9 @@ Environmental APIs
 | Language | Python 3.12+ |
 | Data fetching | `requests`, Open-Meteo REST API |
 | Feature engineering | `pandas`, `numpy` |
-| Classification model | `scikit-learn` (Random Forest), `xgboost` |
-| Validation | Bootstrapping, sensitivity-weighted metrics |
-| Health data parsing | OCR + NLP on PDF discharge summaries (EESZT format) |
+|later: Classification model | `scikit-learn` (Random Forest), `xgboost` |
+|later: Validation | Bootstrapping, sensitivity-weighted metrics |
+|later: Health data parsing | OCR + NLP on PDF discharge summaries (EESZT format) |
 | Output | CSV + plain-language daily summary |
 
 ---
