@@ -2,6 +2,7 @@ Zzz/
 data/raw/
 data/processed/
 data/external/
+data/reports/
 *.pdf
 .env
 __pycache__/

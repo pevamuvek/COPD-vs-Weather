@@ -22,11 +22,13 @@ Output
 ------
 ../data/environmental_data.csv  – one row per day, datetime index
 ../data/data_quality_report.txt – coverage & missing value summary
+../data/reports/               – daily Hungarian HTML risk report
 """
 
 import pandas as pd
-from config import LAT, LON, LOCATION_LABEL, START_DATE, END_DATE, OUTPUT_CSV, OUTPUT_REPORT
+from config import LAT, LON, LOCATION_LABEL, START_DATE, END_DATE, OUTPUT_CSV, OUTPUT_REPORT, REPORT_DIR
 from fetchers import fetch_weather, fetch_air_quality, fetch_weather_forecast, fetch_kp_index, add_rolling_features
+from html_report import generate_daily_html_report
 from report import quality_report
 from score import compute_risk_score
 
@@ -70,6 +72,10 @@ def main():
     print(f"  ✓ Data saved  → {OUTPUT_CSV}  ({len(df)} rows × {len(df.columns)} cols)")
 
     quality_report(df, OUTPUT_REPORT)
+    html_report_path = generate_daily_html_report(
+        df, output_dir=REPORT_DIR, location_label=LOCATION_LABEL
+    )
+    print(f"  HTML report saved -> {html_report_path}")
 
     print("\nDone. ✓\n")
     return df

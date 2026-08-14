@@ -23,13 +23,20 @@ python -m pip install requests pandas numpy
 From the repository root `copd-vs-weather`:
 
 ```powershell
-python code\main.py
+python src\main.py
 ```
 
 ## Expected outputs
 
 - `data/environmental_data.csv` — merged daily dataset with weather, air quality, Kp, and rolling features
 - `data/data_quality_report.txt` — text report summarizing completeness and missing data
+- `data/reports/kockázati_jelentés_YYYY-MM-DD.html` — daily Hungarian risk report
+
+Monthly HTML reports can be generated from the saved CSV without refetching data:
+
+```powershell
+python src\html_report.py monthly
+```
 
 ## Notes
 

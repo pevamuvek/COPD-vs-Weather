@@ -1,6 +1,11 @@
 import pandas as pd
 import numpy as np
-from score import RISK_WEIGHTS
+from score import (
+    FEATURE_RANGES,
+    RISK_WEIGHTS,
+    classify_risk_score,
+    compute_feature_contributions,
+)
 
 def historical_context(df: pd.DataFrame) -> list[str]:
     """Generate historical baseline stats for forecast comparison."""
@@ -23,13 +28,12 @@ def historical_context(df: pd.DataFrame) -> list[str]:
     max_30_score = last_30["risk_score"].max()
     max_30_date = last_30["risk_score"].idxmax()
     
-    mod_plus_30 = (last_30["risk_score"] >= 0.34).sum()
-    mod_plus_90 = (last_90["risk_score"] >= 0.34).sum()
+    moderate_plus = {"moderate", "high", "very_high"}
+    mod_plus_30 = last_30["risk_score"].map(classify_risk_score).isin(moderate_plus).sum()
+    mod_plus_90 = last_90["risk_score"].map(classify_risk_score).isin(moderate_plus).sum()
     
     def tier(score):
-        if score < 0.34: return "low"
-        elif score <= 0.66: return "moderate"
-        else: return "high"
+        return classify_risk_score(score)
     
     lines.append("HISTORICAL CONTEXT")
     lines.append("-" * 35)
@@ -129,26 +133,9 @@ def quality_report(df, path):
                 peak_score = peak_day['risk_score']
                 
                 if pd.notna(peak_score):
-                    # Recompute normalized components to find the highest contributor
-                    peak_features = {}
-                    is_hist = ~df["is_forecast"].fillna(False).astype(bool)
-                    
-                    for feature, weight in RISK_WEIGHTS.items():
-                        if feature not in df.columns or pd.isna(peak_day[feature]):
-                            continue
-                        
-                        value = abs(peak_day[feature]) if feature == "delta_P" else peak_day[feature]
-                        hist_values = df.loc[is_hist, feature].copy()
-                        if feature == "delta_P":
-                            hist_values = hist_values.abs()
-                        
-                        if len(hist_values) > 0 and not hist_values.isna().all():
-                            hist_min = hist_values.min()
-                            hist_max = hist_values.max()
-                            if hist_max != hist_min:
-                                normalized = (value - hist_min) / (hist_max - hist_min)
-                                normalized = min(1.0, max(0.0, normalized))
-                                peak_features[feature] = normalized * weight
+                    peak_features = compute_feature_contributions(
+                        peak_day, RISK_WEIGHTS, FEATURE_RANGES
+                    )
                     
                     if peak_features:
                         top_driver = max(peak_features, key=peak_features.get)

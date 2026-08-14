@@ -24,6 +24,7 @@ A separate configuration module keeps runtime constants centralized and removes 
 - `LAT = 47.5999`
 - `LON = 19.0616`
 - `LOCATION_LABEL = "1039 Budapest, Sarkadi Imre utca 6"`
+- `REPORT_CITY = "Budapest"`
 - `START_DATE = "2020-01-01"`
 - `END_DATE = date.today().isoformat()`
 
@@ -31,6 +32,8 @@ A separate configuration module keeps runtime constants centralized and removes 
 
 - `DATA_DIR = Path(__file__).resolve().parent.parent / "data"`
 - `DATA_DIR.mkdir(parents=True, exist_ok=True)`
+- `REPORT_DIR = DATA_DIR / "reports"`
+- `REPORT_DIR.mkdir(parents=True, exist_ok=True)`
 - `OUTPUT_CSV = DATA_DIR / "environmental_data.csv"`
 - `OUTPUT_REPORT = DATA_DIR / "data_quality_report.txt"`
 

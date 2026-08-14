@@ -8,7 +8,7 @@ A family member lives with severe COPD. This project started as a practical ques
 
 ## What this does
 
-The pipeline fetches daily weather and air quality data for a given location, engineers clinically-motivated features, computes a composite risk score, and produces a plain-language daily summary suitable for a non-technical reader.
+The pipeline fetches daily weather and air quality data for a given location, engineers clinically-motivated features, computes a composite risk score, and produces text plus standalone Hungarian HTML reports suitable for a non-technical reader.
 
 Under the hood it is a time-series feature engineering and binary classification problem — predicting whether a given day falls within a COPD exacerbation risk window.
 
@@ -32,11 +32,11 @@ This is not a generic weather-health dashboard. Feature selection reflects what 
 
 ```
 Environmental APIs
-  ├── Open-Meteo (historical + forecast)       → weather.py
-  └── Open-Meteo Air Quality                   → air_quality.py
+  ├── Open-Meteo (historical + forecast)       → fetchers.py
+  └── Open-Meteo Air Quality + GFZ Kp          → fetchers.py
           │
           ▼
-    Feature Engineering                         → features.py
+    Feature Engineering                         → fetchers.py
       ├── ΔP  (barometric pressure Δ, 24h)
       ├── DTR (diurnal temperature range)
       ├── Dew point
@@ -45,12 +45,13 @@ Environmental APIs
           │
           ▼
     Risk Scoring                                → score.py
-      └── Composite 0–1 score → Low / Moderate / High tier
+      └── Composite 0–1 score → Low / Moderate / High / Very High tier
           │
           ▼
-    Daily Summary                               → report.py
-      ├── Plain-language output (family use)
-      └── Structured data output (analysis / demo)
+    Reports                                     → report.py + html_report.py
+      ├── Data-quality text output
+      ├── Daily Hungarian HTML report
+      └── Optional 30-day HTML overview
 ```
 
 ---
@@ -65,7 +66,7 @@ Environmental APIs
 | Classification model | `scikit-learn` (Random Forest), `xgboost` |
 | Validation | Bootstrapping, sensitivity-weighted metrics |
 | Health data parsing | OCR + NLP on PDF discharge summaries (EESZT format) |
-| Output | CSV + plain-language daily summary |
+| Output | CSV + quality text + standalone Hungarian HTML reports |
 
 ---
 
@@ -115,22 +116,17 @@ Validation strategy:
 ```
 copd-vs-weather/
 ├── src/
-│   ├── fetchers/
-│   │   ├── weather.py          # Open-Meteo historical + forecast
-│   │   └── air_quality.py      # PM2.5, PM10, NO₂
-│   ├── features.py             # Feature engineering (ΔP, DTR, lags, rolling)
-│   ├── score.py                # Composite risk scoring (0–1, tiered)
-│   ├── report.py               # Plain-language summary generation
+│   ├── config.py               # Location, date range, output paths
+│   ├── fetchers.py             # Environmental APIs and derived features
+│   ├── score.py                # Composite risk scoring (0–1, four tiers)
+│   ├── report.py               # Text quality report generation
+│   ├── html_report.py          # Daily/monthly HTML report generation
+│   ├── report_html.css         # Embedded responsive report styling
 │   └── main.py                 # Pipeline entry point
-├── config/
-│   ├── profiles/
-│   │   ├── public.yaml         # Dynamic location (open demo)
-│   │   └── family.yaml.example # Template — actual file gitignored
-│   └── config.py
-├── app.py                      # Streamlit web interface
-├── tests/
+├── test/                       # Verification and report tests
+├── spec/                       # Component specifications
+├── data/                       # Generated data and reports
 ├── .gitignore
-├── requirements.txt
 └── README.md
 ```
 
@@ -143,13 +139,14 @@ git clone https://github.com/pevamuvek/copd-vs-weather
 cd copd-vs-weather
 python -m venv .venv
 source .venv/bin/activate        # or .venv\Scripts\activate on Windows
-pip install -r requirements.txt
+pip install requests pandas numpy
 
-# Run pipeline (public profile, prompts for location)
+# Run the pipeline for the location configured in src/config.py
 python src/main.py
 
-# Run Streamlit app
-streamlit run app.py
+# Rebuild reports from the existing CSV without refetching data
+python src/html_report.py daily
+python src/html_report.py monthly
 ```
 
 No API keys required. All environmental data sources are free and open.
@@ -161,7 +158,7 @@ No API keys required. All environmental data sources are free and open.
 | | Family version | Public demo |
 |---|---|---|
 | Location | Fixed (gitignored config) | Dynamic — browser geolocation, city name, or manual coordinates |
-| Output | Plain-language daily summary | Risk dashboard + methodology view |
+| Output | Text + Hungarian daily/monthly HTML reports | CSV + report generator |
 | Hosting | Private | [Live demo link] |
 | Audience | One person with COPD | Anyone curious about the method |
 

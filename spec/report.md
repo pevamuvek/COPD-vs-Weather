@@ -2,6 +2,9 @@
 
 This module creates a human-readable quality report for the final merged dataset.
 
+Patient-facing standalone HTML reports are generated separately by
+`html_report.py`; see [HTML risk reports](report_html.md).
+
 ## Concept
 
 The report documents data completeness and identifies gaps in the merged daily dataset. It is intended to be an audit artifact for anyone reviewing the generated outputs.

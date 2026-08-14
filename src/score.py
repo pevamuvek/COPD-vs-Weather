@@ -31,49 +31,77 @@ FEATURE_RANGES = {
 }
 
 RISK_TIER_LABELS = {
-    "low": "Low risk",
-    "moderate": "Moderate risk",
-    "high": "High risk",
+    "low": "Low Risk",
+    "moderate": "Moderate Risk",
+    "high": "High Risk",
+    "very_high": "Very High Risk",
     "unknown": "Insufficient data",
 }
 
+# Empirically derived boundaries for the 4-tier hybrid risk model.
+RISK_CUTOFFS = (0.220, 0.300, 0.380)
 
-def compute_row_score(row, feature_weights, feature_ranges):
-    """
-    Compute risk score for a single row using available features.
-    
-    Missing features contribute zero weight — they do not block scoring.
-    A row with only weather features scores on weather features alone.
-    """
+
+def classify_risk_score(score):
+    """Return the risk tier for a score using the 4-tier hybrid model."""
+    if pd.isna(score):
+        return "unknown"
+
+    # Stabilize decimal cutoff comparisons after floating-point normalization.
+    comparison_score = round(float(score), 12)
+    if comparison_score < RISK_CUTOFFS[0]:
+        return "low"
+    if comparison_score < RISK_CUTOFFS[1]:
+        return "moderate"
+    if comparison_score <= RISK_CUTOFFS[2]:
+        return "high"
+    return "very_high"
+
+
+def compute_feature_contributions(row, feature_weights, feature_ranges):
+    """Return each available feature's rescaled contribution to the score."""
+    raw_contributions = {}
     total_weight = 0.0
-    weighted_sum = 0.0
 
     for feature, weight in feature_weights.items():
         value = row.get(feature)
         if value is None or pd.isna(value):
-            continue  # skip missing features, do not add weight
+            continue
 
-        # Use absolute value for delta_P
         if feature == "delta_P":
             value = abs(value)
 
         min_val, max_val = feature_ranges[feature]
         normalised = (value - min_val) / (max_val - min_val)
         normalised = max(0.0, min(1.0, normalised))
-
-        # Invert dew point: lower dew point = higher risk
         if feature == "dew_point_2m_mean":
             normalised = 1.0 - normalised
 
-        weighted_sum += normalised * weight
+        raw_contributions[feature] = normalised * weight
         total_weight += weight
 
     if total_weight == 0:
-        return float("nan")  # no scoreable features at all
+        return {}
 
-    # Rescale to available weights so score stays on 0–1 range
-    return weighted_sum / total_weight
+    return {
+        feature: contribution / total_weight
+        for feature, contribution in raw_contributions.items()
+    }
 
+
+def compute_row_score(row, feature_weights, feature_ranges):
+    """
+    Compute risk score for a single row using available features.
+
+    Missing features contribute zero weight — they do not block scoring.
+    A row with only weather features scores on weather features alone.
+    """
+    contributions = compute_feature_contributions(
+        row, feature_weights, feature_ranges
+    )
+    if not contributions:
+        return float("nan")
+    return sum(contributions.values())
 
 def get_missing_features(row, feature_weights):
     """Return list of missing features for a given row."""
@@ -109,18 +137,9 @@ def compute_risk_score(df: pd.DataFrame) -> pd.DataFrame:
         risk_scores.append(score)
         
         # Assign risk tier and label
-        if pd.isna(score):
-            risk_tiers.append("unknown")
-            risk_labels.append(RISK_TIER_LABELS["unknown"])
-        elif score < 0.34:
-            risk_tiers.append("low")
-            risk_labels.append(RISK_TIER_LABELS["low"])
-        elif score <= 0.66:
-            risk_tiers.append("moderate")
-            risk_labels.append(RISK_TIER_LABELS["moderate"])
-        else:
-            risk_tiers.append("high")
-            risk_labels.append(RISK_TIER_LABELS["high"])
+        tier = classify_risk_score(score)
+        risk_tiers.append(tier)
+        risk_labels.append(RISK_TIER_LABELS[tier])
         
         # Track missing features for quality reporting
         missing = get_missing_features(row, RISK_WEIGHTS)

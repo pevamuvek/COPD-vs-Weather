@@ -25,8 +25,9 @@ The merged dataset is intended to support later COPD risk modeling and event-win
 
 ## Imports
 
-- From `config`: `LAT`, `LON`, `LOCATION_LABEL`, `START_DATE`, `END_DATE`, `OUTPUT_CSV`, `OUTPUT_REPORT`
+- From `config`: `LAT`, `LON`, `LOCATION_LABEL`, `START_DATE`, `END_DATE`, `OUTPUT_CSV`, `OUTPUT_REPORT`, `REPORT_DIR`
 - From `fetchers`: `fetch_weather`, `fetch_air_quality`, `fetch_weather_forecast`, `fetch_kp_index`, `add_rolling_features`
+- From `html_report`: `generate_daily_html_report`
 - From `report`: `quality_report`
 
 ## Behavior
@@ -44,7 +45,8 @@ The merged dataset is intended to support later COPD risk modeling and event-win
 7. Set the index name to `date`.
 8. Write the merged dataset to `OUTPUT_CSV`.
 9. Generate the quality report at `OUTPUT_REPORT`.
-10. Print summary messages and return the final DataFrame.
+10. Generate the daily Hungarian HTML risk report in `REPORT_DIR`.
+11. Print summary messages and return the final DataFrame.
 
 Why outer joins?
 

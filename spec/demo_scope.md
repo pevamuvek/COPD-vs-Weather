@@ -8,13 +8,15 @@ and as a README section for GitHub.
 
 ## What the demo does
 
-The demo pipeline runs once and produces three outputs:
+The demo pipeline runs once and produces four outputs:
 
 1. `data/environmental_data.csv` — historical + 2-day forecast, all features including
    `risk_score`, `risk_tier`, and `is_forecast`.
 2. `data/data_quality_report.txt` — completeness table plus a plain-language
    3-row risk summary for today + 2 days ahead.
-3. Console output — a short human-readable summary printed at the end of `main.py`.
+3. `data/reports/kockázati_jelentés_YYYY-MM-DD.html` — a Hungarian daily risk
+   report covering the previous seven days, today, and up to two forecast days.
+4. Console output — a short human-readable summary printed at the end of `main.py`.
 
 No web server, no database, no trained model, no login.
 
@@ -27,7 +29,7 @@ looks risky for a COPD patient living in Budapest.
 
 **How to run:**
 ```
-python code\main.py
+python src\main.py
 ```
 
 **What they see at the end of the run:**
@@ -103,11 +105,13 @@ created or modified (beyond the existing five):
 
 | File | Action |
 |------|--------|
-| `code/score.py` | New — composite risk index |
-| `code/fetchers.py` | Add `fetch_weather_forecast()` and lag columns |
-| `code/main.py` | Add forecast concat, `compute_risk_score` call, console summary |
-| `code/report.py` | Add risk summary section |
-| `docs/score.md` | New — specification for `score.py` |
+| `src/score.py` | Composite risk index |
+| `src/fetchers.py` | Forecast retrieval and derived features |
+| `src/main.py` | Pipeline orchestration and report calls |
+| `src/report.py` | Text quality and risk summary |
+| `src/html_report.py` | Daily and monthly HTML reports |
+| `src/report_html.css` | Responsive embedded report styles |
+| `spec/report_html.md` | HTML report specification |
 | `README.md` | New or update — audience B entry point |
 
 No new dependencies beyond `requests`, `pandas`, and `numpy`.
