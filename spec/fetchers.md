@@ -8,13 +8,13 @@ The pipeline uses multiple data sources to capture different environmental dimen
 
 Each fetcher returns a pandas `DataFrame` indexed by date. This design makes data joining predictable and preserves every calendar day across sources.
 
-The final merged dataset is suitable for exploratory analysis, visualization, and modeling where environmental features are aligned by day.
+The final merged dataset is suitable for exploratory analysis and visualization, with environmental features aligned by day. Statistical or machine-learning modeling is not currently implemented.
 
 ## Data sources
 
 - Open-Meteo daily weather archive for temperature, pressure, dew point, precipitation, and wind.
 - Open-Meteo air quality API for hourly pollutant readings aggregated to daily means.
-- GFZ Potsdam Kp index data for geomagnetic activity, with a JSON API first and a bulk file fallback.
+- GFZ Potsdam Kp index data for geomagnetic activity, with the bulk file first and the JSON API as fallback.
 
 ## Feature rationale
 
@@ -25,6 +25,7 @@ The selected features are informed by COPD environmental risk research and the p
 - `pm2_5`, `pm10`, and `no2` represent air pollution stressors that can worsen lung function.
 - `Kp_daily_max` and `Kp_daily_mean` introduce a geomagnetic stressor hypothesis, allowing later analysis of solar activity as a secondary trigger.
 - rolling averages over 3, 7, and 14 days capture lagged and cumulative environmental exposure patterns.
+- explicit pressure and temperature shock lags are computed for analysis: `delta_P_lag2d`, `delta_P_lag5d`, `delta_P_lag7d`, `delta_P_lag14d`, `DTR_lag2d`, `DTR_lag7d`, and `DTR_lag14d`. The current `main.py` output selection does not retain them in the CSV, and they are not inputs to the current risk score.
 
 These variables are consistent with the project’s academic benchmark goals and the data-driven risk window design.
 
@@ -33,6 +34,7 @@ These variables are consistent with the project’s academic benchmark goals and
 - `requests`
 - `pandas as pd`
 - `numpy as np`
+- `time`
 
 ## Constants
 
@@ -111,6 +113,15 @@ The function should:
 - add columns named `{column}_roll{window}d`
 
 Rolling averages provide a simple way to capture short- and medium-term environmental trends without introducing excessive lag.
+
+The function also computes these lag columns when their source columns are present:
+
+- `delta_P`: 2, 5, 7, and 14 days
+- `DTR`: 2, 7, and 14 days
+
+The lag values use `shift()` and are not currently used by
+`compute_risk_score()`. They are also omitted by `main.py` when selecting columns
+for the saved CSV.
 
 ## Navigation
 

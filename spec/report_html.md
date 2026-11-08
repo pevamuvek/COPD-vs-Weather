@@ -29,7 +29,7 @@ days plus today) and up to two subsequent forecast rows. It contains:
 
 1. risk outlook and four metric cards;
 2. a detailed table with DTR and pressure flags;
-3. model-consistent driver contribution bars;
+3. risk-score-consistent driver contribution bars;
 4. a short Hungarian narrative and forecast-data caveat;
 5. Kp coverage, extreme-heat, wellbeing, and clinical-disclaimer notes.
 
@@ -55,8 +55,11 @@ comparison prompt.
 | `unknown` | Ismeretlen | missing score |
 
 The HTML generator derives display tiers from `risk_score` through the production
-classifier. Driver text and bars use the same fixed feature normalization and
-partial-weight rescaling as `score.py`.
+classifier. The cutoffs are anchored to the observed score distribution in the
+2015–2026 historical dataset (approximately the 28th, 72nd, and 93rd
+percentiles); they are heuristic thresholds, not clinically validated limits.
+Driver text and bars use the same fixed feature normalization and partial-weight
+rescaling as `score.py`.
 
 ## Formatting and safety
 

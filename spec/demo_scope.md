@@ -57,7 +57,7 @@ whether to have medication at hand.
 **Who:** Researchers, developers, or COPD patients in other cities who want to
 run the same pipeline for their own location.
 
-**What they need to change:** Only two values in `config.py`:
+**What they need to change:** The location settings in `config.py`:
 ```python
 LAT = 47.5999       # replace with their coordinates
 LON = 19.0616

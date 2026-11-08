@@ -2,15 +2,15 @@
 
 **A personal data pipeline for environmental COPD risk monitoring — grounded in clinical research, built for real use.**
 
-A family member lives with severe COPD. This project started as a practical question: *can publicly available environmental data predict bad days before they happen?* It grew into a structured data engineering and risk modelling exercise, drawing on peer-reviewed Hungarian epidemiological research and designed with open-source reusability in mind.
+A family member lives with severe COPD. This project started as a practical question: *can publicly available environmental data help us understand difficult days?* It grew into a structured data engineering and environmental risk-scoring exercise, drawing on peer-reviewed Hungarian epidemiological research and designed with open-source reusability in mind.
 
 ---
 
 ## What this does
 
-The pipeline fetches daily weather and air quality data for a given location, engineers clinically-motivated features, computes a composite risk score, and produces text plus standalone Hungarian HTML reports suitable for a non-technical reader.
+The pipeline fetches daily weather, air quality, and geomagnetic data for a configured location, engineers environmental features, computes a composite risk score, and produces text and Hungarian HTML reports suitable for a non-technical reader.
 
-Under the hood it is a time-series feature engineering and binary classification problem — predicting whether a given day falls within a COPD exacerbation risk window.
+The score is a weighted environmental index, not a probability or a prediction of a COPD exacerbation. There is currently no event-labeling strategy or statistical/ML model; those are outside the scope of this version.
 
 ---
 
@@ -40,8 +40,8 @@ Environmental APIs
       ├── ΔP  (barometric pressure Δ, 24h)
       ├── DTR (diurnal temperature range)
       ├── Dew point
-      ├── Lag columns (pressure + temp shock, 1–3 day lags)
-      └── Rolling averages (3, 7, 14-day windows)
+      ├── Computes pressure lags (2, 5, 7, 14 days) and DTR lags (2, 7, 14 days)
+      └── Rolling means (3, 7, 14 days) for pollution and Kp
           │
           ▼
     Risk Scoring                                → score.py
@@ -60,11 +60,11 @@ Environmental APIs
 
 | Component | Technology |
 |---|---|
-| Language | Python 3.12+ |
-| Data fetching | `requests`, Open-Meteo REST API |
+| Language | Python 3.12+ (tested here with 3.14.5) |
+| Data fetching | `requests`, Open-Meteo and GFZ Potsdam APIs/data |
 | Feature engineering | `pandas`, `numpy` |
-| Classification model (later) | `scikit-learn` (Random Forest), `xgboost` |
-| Validation (later) | Bootstrapping, sensitivity-weighted metrics |
+| Statistical/ML modeling (later) | Not implemented; requires event labels and a modeling strategy |
+| Model validation (later) | Not implemented; requires a defined model and labeled event data |
 | Health data parsing (later) | OCR + NLP on PDF discharge summaries (EESZT format) |
 | Output | CSV + quality text + standalone Hungarian HTML reports |
 
@@ -73,7 +73,7 @@ Environmental APIs
 ## Feature engineering rationale
 
 ### ΔP — Barometric pressure change (24h)
-Rapid pressure drops trigger bronchoconstriction. A single-point pressure reading carries no predictive signal; the *rate of change* does. This is computed as a 24-hour first difference, with a separate lag-1 and lag-2 column to capture delayed physiological response.
+The daily pressure difference is computed as a first difference of daily mean surface pressure. The feature builder also computes selected lagged pressure differences; see the lag structure below.
 
 ### DTR — Diurnal Temperature Range
 The spread between daily high and low temperature is a stronger predictor than mean temperature alone. A hot afternoon followed by a cold night stresses the airways differently than a consistently warm day.
@@ -82,7 +82,21 @@ The spread between daily high and low temperature is a stronger predictor than m
 Cumulative environmental stress matters independently of acute events. A week of moderate air pollution followed by a pressure drop is a different risk profile than an isolated pressure drop. Rolling means capture this background load.
 
 ### Lag structure
-The Pécs Study identifies the 2–14 day window as clinically significant. Features are computed not only for the current day but for the preceding 1–3 days, so the model can learn that today's score is partly a function of what happened last Tuesday.
+The feature builder computes explicit lag columns for selected pressure and temperature features: `delta_P` at 2, 5, 7, and 14 days, and `DTR` at 2, 7, and 14 days. The current pipeline does not retain these lag columns in the saved CSV or use them in the risk score; they do not imply that a model has learned a clinical relationship.
+
+### Risk score and tiers
+
+The current score is a weighted combination of normalized environmental indicators, rescaled over the features available on each day. It is not a probability, a clinical threshold, or a validated prediction. Tier cutoffs are anchored to the observed distribution of scores in the 2015–2026 historical dataset, not to clinical outcomes:
+
+| Tier | Score |
+|---|---|
+| Low | `< 0.220` |
+| Moderate | `0.220` to `< 0.300` |
+| High | `0.300` to `0.380` |
+| Very High | `> 0.380` |
+| Unknown | Score unavailable |
+
+These cutoffs are heuristic and require further evaluation; the event count is low, and a strategy for connecting environmental data to clinical events has not yet been defined.
 
 ---
 
@@ -93,21 +107,18 @@ The Pécs Study identifies the 2–14 day window as clinically significant. Feat
 | Open-Meteo Historical Weather API | Temperature, pressure, humidity, dew point, wind | Free, no key |
 | Open-Meteo Air Quality API | PM2.5, PM10, NO₂ | Free, no key |
 | Open-Meteo Forecast API | 1–3 day forecast for risk preview | Free, no key |
-| Open-Meteo Geocoding API | Location resolution by city name | Free, no key |
-| EESZT (Hungarian Electronic Health Service Space) | Discharge summaries (PDF) | Patient-controlled, private |
+| GFZ Potsdam Kp index | 3-hourly geomagnetic index, aggregated by UTC day | Free |
+| Open-Meteo Geocoding API | City-name location lookup; not available in this public repository yet | Free, no key |
 
-Health data is never version-controlled. All patient-derived inputs are processed locally and explicitly excluded from the repository via `.gitignore`.
+Clinical event records and EESZT discharge summaries are not fetched or processed by this pipeline. Any future use of patient-derived data would require appropriate privacy controls and local handling.
 
 ---
 
-## Validation approach
+## Future modeling and validation
 
-The primary challenge is **low event count**: COPD exacerbations are relatively rare events even in a high-risk individual, producing a dataset with significant class imbalance.
+The low number of COPD exacerbation events is a valid constraint on future analysis, but there is not yet a defined strategy for linking environmental observations to clinical events or modeling that relationship. This project does not currently train or validate a statistical or machine-learning model.
 
-Validation strategy:
-- **Bootstrapping** to estimate metric variance without overfitting to a single train/test split
-- **Sensitivity-weighted evaluation**: false negatives (missed risk days) are clinically more costly than false positives, so recall on the positive class is the primary metric
-- **Feature importance analysis**: Random Forest feature importances are used to verify that the model is learning from clinically plausible signals, not spurious correlations
+Event labeling, a modeling approach, and an evaluation strategy remain future work. The current weighted environmental score and its tiers should not be interpreted as learned from event data or clinically validated.
 
 ---
 
@@ -151,24 +162,30 @@ python src/html_report.py monthly
 
 No API keys required. All environmental data sources are free and open.
 
+The pipeline writes:
+
+- `data/environmental_data.csv` — merged daily environmental data and scores
+- `data/data_quality_report.txt` — coverage, missing-data, and risk summary
+- `data/reports/kockázati_jelentés_YYYY-MM-DD.html` — Hungarian daily report
+
 ---
 
-## Two versions, one codebase
+## Current pipeline and future public demo
 
-| | Family version | Public demo |
+| | Current configured pipeline | Future public demo |
 |---|---|---|
-| Location | Fixed (gitignored config) | Dynamic — browser geolocation, city name, or manual coordinates |
-| Output | Text + Hungarian daily/monthly HTML reports | CSV + report generator |
-| Hosting | Private | [Live demo link] |
-| Audience | One person with COPD | Anyone curious about the method |
+| Location | Coordinates and label set in `src/config.py` | City-name lookup is not available in this repository yet |
+| Output | CSV, quality text, and Hungarian daily/monthly HTML reports | Not available yet |
+| Hosting | Local | Not available yet |
+| Audience | Personal environmental monitoring and analysis | Future open-science use |
 
-The pipeline code is identical. Only the location configuration and UI copy differ.
+The current repository is a local command-line pipeline; there is no browser interface or live public demo yet.
 
 ---
 
 ## Project status
 
-**Work in progress.** Started May 2026. First family test run: June 2026. Target for a fully usable version: July–August 2026.
+**Work in progress.** Started May 2026. First family test run: June 2026. Target for a fully usable version: end of 2026.
 
 Feedback, ideas, and contributions are welcome — see open issues or start a discussion.
 
@@ -179,9 +196,9 @@ Feedback, ideas, and contributions are welcome — see open issues or start a di
 - It is not a clinical decision support tool and should not be used as one
 - It does not replace medical advice
 - This is a private study project built by someone who is not a doctor — treat it accordingly
-- The model is trained on a single patient's event history — it is a personal risk indicator, not a generalised COPD prediction model
+- The weighted score is an environmental indicator, not a COPD prediction and not a clinical decision-support tool
 
-The methodology is designed to be sound. The scope is intentionally narrow.
+The scope is intentionally narrow; the score and its clinical relevance still require evaluation.
 
 ---
 
@@ -190,8 +207,8 @@ The methodology is designed to be sound. The scope is intentionally narrow.
 The following are documented and out of scope for the current demo phase:
 
 - Multi-patient support
-- Automated clinical data ingestion (currently manual OCR step)
-- Prospective ML model retraining as new event data accumulates
+- Clinical event labeling and automated clinical data ingestion
+- Statistical/ML modeling and validation (event-linking strategy not yet defined)
 - Push notification layer for high-risk days
 
 ---

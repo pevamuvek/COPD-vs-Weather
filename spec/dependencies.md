@@ -8,7 +8,10 @@ The project is intentionally lightweight. It depends on stable Python packages f
 
 ## Python compatibility
 
-- Python 3.10+
+- Python 3.12+
+
+The project environment was validated with Python 3.14.5. Compatibility with the
+minimum version should be verified when dependencies or language features change.
 
 ## Required packages
 

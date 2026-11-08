@@ -1,30 +1,27 @@
-# Spec — `score.py` Fix: Partial Feature Scoring
-## Forecast rows must score on available features
+# `score.py` — Partial Feature Scoring
 
-**Project:** copd-vs-weather  
-**Prepared for:** GitHub Copilot execution  
-**Priority:** Blocker — fixes NaN risk scores on forecast rows  
+This document records the implemented partial-feature scoring behavior. The
+current risk-tier cutoffs are documented in
+[report_html.md](report_html.md#four-tier-display); the earlier three-tier
+thresholds in this historical fix proposal have been replaced.
 
----
-
-## Instructions for Copilot
-
-Do not fetch any URLs. Do not install any packages. Do not run any code.  
-Show me the full updated `score.py` before applying anything.  
-Wait for approval before writing to disk.
+**Project:** copd-vs-weather
+**Scope:** Weighted environmental index; no statistical or machine-learning model
 
 ---
 
 ## Problem
 
-Forecast rows have valid weather features (DTR, delta_P, dew_point_2m_mean) but missing AQ values (pm2_5, pm10, no2) and missing Kp values. The current scoring logic returns NaN for any row where required columns are NaN, leaving forecast rows unscored.
+Forecast rows can have valid weather features (DTR, delta_P, dew_point_2m_mean)
+while AQ and Kp features are unavailable. The partial-scoring behavior below
+allows those rows to be scored using their available features.
 
 ---
 
 ## Required behaviour
 
 Score every row using whatever features are available.  
-Missing features contribute zero to the composite score — they do not block scoring.  
+Missing features are skipped and the remaining weights are rescaled; they do not block scoring.
 A row with only weather features scores on weather features alone.  
 A row with weather + AQ scores on both.  
 A fully populated row scores on everything.
@@ -97,10 +94,15 @@ def compute_row_score(row, feature_weights, feature_ranges):
 
 | Score | Tier | Label |
 |---|---|---|
-| 0.0 – 0.33 | `low` | Low risk |
-| 0.34 – 0.66 | `moderate` | Moderate risk |
-| 0.67 – 1.0 | `high` | High risk |
+| `< 0.220` | `low` | Low Risk |
+| `0.220` to `< 0.300` | `moderate` | Moderate Risk |
+| `0.300` to `0.380` | `high` | High Risk |
+| `> 0.380` | `very_high` | Very High Risk |
 | NaN | `unknown` | Insufficient data |
+
+The boundaries are anchored to the observed distribution of scores in the
+2015–2026 historical dataset, approximately the 28th, 72nd, and 93rd
+percentiles. They are heuristic thresholds, not clinically validated limits.
 
 ---
 
@@ -109,8 +111,8 @@ def compute_row_score(row, feature_weights, feature_ranges):
 `score.py` must populate these three columns for every row where at least one feature is non-null:
 
 - `risk_score` — float, 0–1
-- `risk_tier` — string: `low` / `moderate` / `high` / `unknown`
-- `risk_label` — string: `Low risk` / `Moderate risk` / `High risk` / `Insufficient data`
+- `risk_tier` — string: `low` / `moderate` / `high` / `very_high` / `unknown`
+- `risk_label` — display label corresponding to the assigned tier
 
 ---
 
@@ -125,12 +127,9 @@ When forecast rows are scored on partial features, add a note to the quality rep
 
 ---
 
-## Acceptance criteria
+## Expected behavior
 
-Copilot task is complete when:
-
-- [ ] Forecast rows (is_forecast = True) have non-null `risk_score`, `risk_tier`, `risk_label`
-- [ ] Historical rows score identically to before (no regression)
-- [ ] A row with all features NaN returns `risk_tier = unknown`
-- [ ] Score stays within 0–1 range for all rows
-- [ ] Quality report notes which features were missing for forecast rows
+- Forecast rows with available score features receive a score, tier, and label.
+- A row with all score features missing receives a NaN score and `unknown` tier.
+- Scores remain within the 0–1 range.
+- The quality report identifies unavailable score features for forecast rows.

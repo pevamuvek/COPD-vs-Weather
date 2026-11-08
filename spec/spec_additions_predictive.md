@@ -58,7 +58,7 @@ This ensures today is not doubled if the archive already contains it.
 
 ---
 
-## 2. `fetchers.md` — extend `add_rolling_features()` with explicit lag columns
+## 2. `fetchers.md` — explicit lag columns (CSV retention still pending)
 
 ### Purpose
 
@@ -87,89 +87,35 @@ Use `df[col].shift(n)` for each lag. NaN values on the first N rows are expected
 - Only add a lag column when the source column is present in `df`; use `if col in df.columns`.
 - Column naming must follow the pattern `{source_col}_lag{n}d` exactly for downstream
   compatibility.
-- These columns must appear in the CSV after the rolling mean columns.
+- The feature builder computes these columns, but the current `main.py` output
+selection omits them from the CSV. Persisting them after the rolling mean
+columns remains an implementation requirement if downstream analysis needs
+them.
 
 ---
 
-## 3. New file: `score.md` — daily composite risk index
+## 3. Daily environmental risk score and tiers
 
-Add `code/score.py` and its specification `docs/score.md`.
+The original score design in this proposal has been superseded by the current
+implementation in `src/score.py` and its specification in
+[spec_score_fix.md](spec_score_fix.md). The current score uses the fixed feature
+weights and reference ranges documented there, scores with available features,
+and is an environmental index—not an event probability or a learned model.
 
-### Purpose
+The current four-tier cutoffs are anchored to the observed score distribution
+in the 2015–2026 historical dataset:
 
-Translates the multi-feature daily DataFrame into a single 0–1 risk score per day.
-This is the output a non-technical user (or a GitHub visitor) can understand at a glance.
-No machine learning is required for the demo version; the score is a transparent
-weighted sum of normalised stressor signals.
+| Tier | `risk_score` |
+|---|---|
+| `low` | `< 0.220` |
+| `moderate` | `0.220` to `< 0.300` |
+| `high` | `0.300` to `0.380` |
+| `very_high` | `> 0.380` |
+| `unknown` | Score is missing |
 
-### Function: `compute_risk_score(df)`
-
-#### Input
-
-The fully merged and feature-engineered DataFrame produced by `main.py`.
-
-#### Algorithm (demo version — no model required)
-
-1. Select the following input columns (skip any that are NaN or missing):
-   - `delta_P` (absolute value — direction does not matter, magnitude does)
-   - `DTR`
-   - `pm2_5_roll3d`
-   - `no2_roll3d`
-   - `dew_point_2m_mean`
-
-2. For each column, compute a min-max normalisation using the historical range
-   (i.e. the rows where `is_forecast == False` or column is absent):
-   ```
-   normalised = (x - x_hist_min) / (x_hist_max - x_hist_min)
-   ```
-   Clip to [0, 1].
-
-3. Apply fixed weights (sum to 1.0):
-
-   | Feature            | Weight | Rationale |
-   |--------------------|--------|-----------|
-   | `abs(delta_P)`     | 0.30   | Primary pressure shock trigger |
-   | `DTR`              | 0.25   | Temperature fluctuation stress (Pécs Study) |
-   | `pm2_5_roll3d`     | 0.20   | Cumulative fine particle load |
-   | `no2_roll3d`       | 0.15   | Pollution–front synergy |
-   | `dew_point_2m_mean`| 0.10   | Humid heat discomfort |
-
-4. Compute `risk_score = weighted_sum` of available normalised inputs,
-   re-normalising weights to 1.0 if any input is missing.
-
-5. Add three columns to `df`:
-   - `risk_score` (float, 0–1)
-   - `risk_tier` (string: `"low"` < 0.35, `"moderate"` 0.35–0.65, `"high"` > 0.65)
-   - `risk_label` (human-readable string for display, e.g. `"Low — conditions stable"`)
-
-6. Return the updated DataFrame.
-
-#### Output columns
-
-| Column        | Type   | Range  | Description |
-|---------------|--------|--------|-------------|
-| `risk_score`  | float  | 0–1    | Composite daily risk index |
-| `risk_tier`   | string | —      | `low` / `moderate` / `high` |
-| `risk_label`  | string | —      | Plain-language summary |
-
-### Integration point in `main.py`
-
-After `add_rolling_features`, call:
-
-```python
-from score import compute_risk_score
-df = compute_risk_score(df)
-```
-
-### Requirements
-
-- No new dependencies beyond `pandas` and `numpy`.
-- Weights must be defined as a named constant dict at the top of `score.py`
-  so they are easy to update after model fitting.
-- The function must not raise an exception if some input columns are missing;
-  it must degrade gracefully by skipping missing features.
-- The normalisation baseline must use only historical rows (`is_forecast == False`)
-  to prevent future values from contaminating the scale.
+These are heuristic, distribution-based thresholds, not clinically validated
+limits. The tier definitions are also specified in
+[report_html.md](report_html.md#four-tier-display).
 
 ---
 
@@ -206,14 +152,13 @@ This note is the output intended for a non-technical reader (demo audience A).
 
 ---
 
-## 5. `main.md` — remove orphaned references
+## 5. `main.md` — orphaned references (resolved)
 
-The following items appear in the "Dataset purpose" section of `main.md` but have no
-specification anywhere in the project. They must either be specified or removed to keep
-the spec implementable:
+The following items previously appeared in the "Dataset purpose" section of
+`main.md` without specifications:
 
 - `viral_cofactor` — remove from the bullet list or add a stub specification.
 - `uncertain event flags` — same.
 
-**Recommended action for demo scope:** remove both references from `main.md`.
-They can be re-added later when the EESZT label pipeline is specified.
+Both references have been removed from `main.md`. They can be reconsidered
+after an event-labeling approach is defined.
