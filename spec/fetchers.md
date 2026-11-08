@@ -36,8 +36,8 @@ These variables are consistent with the project’s academic benchmark goals and
 
 ## Constants
 
-- `KP_URL = "https://www.gfz-potsdam.de/fileadmin/gfz/sec33/ap_kp_data/Kp_ap_since_1932.txt"`
-- `KP_FALLBACK_URL = "https://kp.gfz-potsdam.de/app/json/?start={start}&end={end}&index=Kp&status=def"`
+- `KP_URL = "https://kp.gfz.de/app/files/Kp_ap_Ap_SN_F107_since_1932.txt"`
+- `KP_FALLBACK_URL = "https://kp.gfz.de/app/json/?start={start}&end={end}&index=Kp&status=all"`
 
 ## Functions
 
@@ -80,14 +80,20 @@ Fetches geomagnetic Kp index values and aggregates them to daily summary statist
 
 The function must be resilient:
 
-- first attempt the GFZ JSON API
-- if that fails, fall back to the bulk text data archive
-- if both sources fail, return a date-indexed DataFrame with NaN Kp values
+- first attempt the GFZ bulk text data archive
+- if that fails, fall back to the GFZ JSON API in yearly chunks
+- if both sources fail, return a date-indexed DataFrame with NaN Kp summaries
+  and `Kp_n = 0`
+- aggregate by UTC date, matching the timestamps in the GFZ sources
+- count valid 3-hourly readings in `Kp_n`; include dates with no readings as
+  incomplete days with `Kp_n = 0`
 
 The returned daily DataFrame should contain:
 
 - `Kp_daily_max`
 - `Kp_daily_mean`
+- `Kp_n` — valid readings per day (0–8)
+- `Kp_daily_sum` — sum when all eight readings are present, otherwise NaN
 
 Why Kp is included:
 

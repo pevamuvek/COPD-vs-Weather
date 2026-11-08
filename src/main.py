@@ -9,14 +9,14 @@ Data sources
 ------------
 1. Open-Meteo Historical Weather API  – temperature, pressure, dew point
 2. Open-Meteo Air Quality API         – PM2.5, PM10, NO₂
-3. GFZ Potsdam Kp-index               – 3-hour geomagnetic activity → daily max/mean
+3. GFZ Potsdam Kp-index               – 3-hour geomagnetic activity → daily summaries
 
 Engineered features
 -------------------
 - DTR        : Diurnal Temperature Range  (T_max − T_min)
 - delta_P    : Barometric pressure change over 24 h  (ΔP)
 - Rolling averages: 3, 7, 14-day windows for PM2.5, PM10, NO₂, Kp_max
-- Kp_daily_max / Kp_daily_mean : aggregated from 3-h resolution
+- Kp_daily_max / Kp_daily_mean / Kp_n / Kp_daily_sum : aggregated from 3-h resolution
 
 Output
 ------
@@ -61,7 +61,7 @@ def main():
         "surface_pressure_mean", "delta_P", "dew_point_2m_mean",
         "precipitation_sum", "windspeed_10m_max",
         "pm2_5", "pm10", "no2",
-        "Kp_daily_max", "Kp_daily_mean",
+        "Kp_daily_max", "Kp_daily_mean", "Kp_n", "Kp_daily_sum",
     ]
     score_cols = [c for c in ["risk_score", "risk_tier", "risk_label", "is_forecast"] if c in df.columns]
     roll_cols = [c for c in df.columns if "roll" in c]

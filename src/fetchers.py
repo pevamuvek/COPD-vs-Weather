@@ -1,9 +1,13 @@
 import requests
 import pandas as pd
 import numpy as np
+import time
 
-KP_URL = "https://www.gfz-potsdam.de/fileadmin/gfz/sec33/ap_kp_data/Kp_ap_since_1932.txt"
-KP_FALLBACK_URL = "https://kp.gfz-potsdam.de/app/json/?start={start}&end={end}&index=Kp&status=def"
+KP_URL = "https://kp.gfz.de/app/files/Kp_ap_Ap_SN_F107_since_1932.txt"
+KP_FALLBACK_URL = (
+    "https://kp.gfz.de/app/json/?start={start}&end={end}&index=Kp&status=all"
+)
+KP_COLUMNS = ["Kp_daily_max", "Kp_daily_mean", "Kp_n", "Kp_daily_sum"]
 
 
 def fetch_weather(lat: float, lon: float, start: str, end: str) -> pd.DataFrame:
@@ -101,67 +105,152 @@ def fetch_weather_forecast(lat: float, lon: float, days: int = 3) -> pd.DataFram
     return df.set_index("date")
 
 
+def _get(url: str, timeout: int, tries: int = 3) -> requests.Response:
+    """Retry transient server and connection failures; propagate client errors."""
+    last_error = None
+    for attempt in range(tries):
+        try:
+            response = requests.get(url, timeout=timeout)
+            if response.status_code >= 500:
+                last_error = requests.HTTPError(
+                    f"HTTP {response.status_code} for {url}"
+                )
+            else:
+                response.raise_for_status()
+                return response
+        except (requests.ConnectionError, requests.Timeout) as error:
+            last_error = error
+
+        if attempt < tries - 1:
+            time.sleep(2 ** attempt)
+
+    if last_error is None:
+        raise requests.RequestException("Kp request failed without a response")
+    raise last_error
+
+
+def _parse_kp_bulk(text: str) -> pd.DataFrame:
+    """Parse GFZ daily rows into 3-hourly UTC timestamps and Kp values."""
+    records = []
+    for line in text.splitlines():
+        if not line.strip() or line.startswith("#"):
+            continue
+        parts = line.split()
+        if len(parts) < 15:
+            continue
+        try:
+            year, month, day = map(int, parts[:3])
+            values = [float(value) for value in parts[7:15]]
+            day_start = pd.Timestamp(year=year, month=month, day=day)
+        except (ValueError, OverflowError):
+            continue
+        for interval, value in enumerate(values):
+            records.append((day_start + pd.Timedelta(hours=3 * interval), value))
+
+    return pd.DataFrame(records, columns=["datetime", "Kp"])
+
+
+def _kp_date_range(start: str, end: str) -> pd.DatetimeIndex:
+    return pd.date_range(
+        start=pd.Timestamp(start).normalize(),
+        end=pd.Timestamp(end).normalize(),
+        freq="D",
+        name="date",
+    )
+
+
+def _daily_kp(df: pd.DataFrame, start: str, end: str) -> pd.DataFrame:
+    """Aggregate valid 3-hourly Kp readings and retain wholly missing days."""
+    valid = df[df["Kp"].ge(0)].copy()
+    valid["date"] = valid["datetime"].dt.normalize()
+    grouped = valid.groupby("date")["Kp"]
+    daily = pd.DataFrame(
+        {
+            "Kp_daily_max": grouped.max(),
+            "Kp_daily_mean": grouped.mean(),
+            "Kp_n": grouped.count(),
+            "Kp_daily_sum": grouped.sum(),
+        }
+    ).reindex(_kp_date_range(start, end))
+    daily["Kp_n"] = daily["Kp_n"].fillna(0).astype(int)
+    daily["Kp_daily_sum"] = daily["Kp_daily_sum"].where(daily["Kp_n"] == 8)
+    return daily[KP_COLUMNS]
+
+
+def _fetch_kp_json(start: str, end: str) -> pd.DataFrame:
+    """Fetch JSON in yearly chunks to avoid an oversized API response."""
+    frames = []
+    current, last = pd.Timestamp(start).normalize(), pd.Timestamp(end).normalize()
+    while current <= last:
+        chunk_end = min(pd.Timestamp(year=current.year, month=12, day=31), last)
+        url = KP_FALLBACK_URL.format(
+            start=current.strftime("%Y-%m-%dT00:00:00Z"),
+            end=chunk_end.strftime("%Y-%m-%dT23:59:59Z"),
+        )
+        data = _get(url, timeout=60).json()
+        frames.append(
+            pd.DataFrame(
+                {
+                    "datetime": pd.to_datetime(data["datetime"], utc=True).tz_convert(None),
+                    "Kp": data["Kp"],
+                }
+            )
+        )
+        current = chunk_end + pd.Timedelta(days=1)
+    return pd.concat(frames, ignore_index=True)
+
+
+def _validate_kp(df: pd.DataFrame) -> None:
+    if df.empty:
+        raise ValueError("GFZ returned no Kp readings for the requested range")
+    if df["Kp"].max() > 9.01:
+        raise ValueError(f"Kp max {df['Kp'].max()} exceeds the expected maximum of 9")
+
+
+def _missing_kp(start: str, end: str) -> pd.DataFrame:
+    result = pd.DataFrame(np.nan, index=_kp_date_range(start, end), columns=KP_COLUMNS)
+    result["Kp_n"] = 0
+    return result
+
+
 def fetch_kp_index(start: str, end: str) -> pd.DataFrame:
-    """Fetch 3-hourly Kp index and aggregate to daily max/mean."""
-    print("  → Fetching Kp-index from GFZ Potsdam…")
-
-    e_json = None
-    try:
-        url = KP_FALLBACK_URL.format(start=start, end=end)
-        r = requests.get(url, timeout=60)
-        r.raise_for_status()
-        data = r.json()
-
-        df = pd.DataFrame({
-            "datetime": pd.to_datetime(data["datetime"]),
-            "Kp":       data["Kp"],
-        })
-        df["date"] = df["datetime"].dt.normalize()
-        daily = (
-            df.groupby("date")["Kp"]
-            .agg(Kp_daily_max="max", Kp_daily_mean="mean")
-        )
-        print(f"     Kp rows (JSON API): {len(daily)}")
-        return daily
-
-    except Exception as e:
-        e_json = e
-        print(f"     JSON API failed ({e_json}), trying bulk text file…")
+    """Fetch GFZ Kp readings and aggregate them by UTC day."""
+    print("  Fetching Kp-index from GFZ Potsdam...")
+    errors = []
 
     try:
-        r = requests.get(KP_URL, timeout=120)
-        r.raise_for_status()
-        lines = [l for l in r.text.splitlines() if l and not l.startswith("#")]
-        records = []
-        for line in lines:
-            parts = line.split()
-            if len(parts) < 14:
-                continue
-            try:
-                year, month, day = int(parts[0]), int(parts[1]), int(parts[2])
-                kp_vals = [float(parts[7 + i]) / 10 for i in range(8)]
-                for i, kp in enumerate(kp_vals):
-                    dt = pd.Timestamp(year=year, month=month, day=day, hour=i * 3)
-                    records.append({"datetime": dt, "Kp": kp})
-            except Exception:
-                continue
+        bulk = _parse_kp_bulk(_get(KP_URL, timeout=120).text)
+        bulk = bulk[
+            bulk["datetime"].between(
+                pd.Timestamp(start).normalize(),
+                pd.Timestamp(end).normalize() + pd.Timedelta(days=1)
+                - pd.Timedelta(nanoseconds=1),
+            )
+        ]
+        _validate_kp(bulk)
+        daily = _daily_kp(bulk, start, end)
+        source = "bulk file"
+    except Exception as error:
+        errors.append(f"bulk file: {error}")
+        print(f"     Bulk file failed ({error}), trying JSON API…")
+        try:
+            json_df = _fetch_kp_json(start, end)
+            _validate_kp(json_df)
+            daily = _daily_kp(json_df, start, end)
+            source = "JSON API"
+        except Exception as json_error:
+            errors.append(f"JSON API: {json_error}")
+            print("     WARNING: All Kp sources failed. Kp values will be missing.")
+            for message in errors:
+                print(f"       {message}")
+            return _missing_kp(start, end)
 
-        df = pd.DataFrame(records)
-        df = df[(df["datetime"] >= start) & (df["datetime"] <= end)]
-        df["date"] = df["datetime"].dt.normalize()
-        daily = (
-            df.groupby("date")["Kp"]
-            .agg(Kp_daily_max="max", Kp_daily_mean="mean")
-        )
-        print(f"     Kp rows (bulk file): {len(daily)}")
-        return daily
-
-    except Exception as e_bulk:
-        print(f"     ⚠ Both Kp sources failed. Kp columns will be NaN.\n"
-              f"       JSON error : {e_json}\n"
-              f"       Bulk error : {e_bulk}")
-        idx = pd.date_range(start=start, end=end, freq="D", name="date")
-        return pd.DataFrame({"Kp_daily_max": np.nan, "Kp_daily_mean": np.nan}, index=idx)
+    incomplete = int((daily["Kp_n"] < 8).sum())
+    print(
+        f"     Kp rows ({source}): {len(daily)} days, latest "
+        f"{daily.index.max().date()}, incomplete days: {incomplete}"
+    )
+    return daily
 
 
 def add_rolling_features(df: pd.DataFrame) -> pd.DataFrame:
