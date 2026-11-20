@@ -79,6 +79,7 @@ class HTMLReportTests(unittest.TestCase):
         self.assertIn("LK hiányzik", html)
         self.assertIn("alsó becslések", html)
         self.assertIn("abszolút hőterhelést nem méri", html)
+        self.assertNotIn("GFZ Potsdam Kp", html)
         self.assertIn("Budapest &lt;teszt &amp; hely&gt;", html)
         self.assertEqual(html.count('<tr class="'), 10)
         for tier in ("low", "moderate", "high", "very_high", "unknown"):

@@ -49,7 +49,6 @@ DRIVER_LABELS = {
     "pm2_5": "Szálló por (PM₂,₅)",
     "delta_P": "Légnyomásváltozás (ΔP)",
     "dew_point_2m_mean": "Alacsony harmatpont",
-    "Kp_daily_max": "Kp-index",
     "no2": "Nitrogén-dioxid (NO₂)",
     "pm10": "Szálló por (PM10)",
 }
@@ -58,7 +57,6 @@ DRIVER_CSS = {
     "pm2_5": "driver-pm",
     "delta_P": "driver-dp",
     "dew_point_2m_mean": "driver-dew",
-    "Kp_daily_max": "driver-kp",
 }
 DRIVER_FEATURES = tuple(DRIVER_CSS)
 
@@ -407,16 +405,6 @@ def _daily_notes(rows: pd.DataFrame, today, forecast: pd.DataFrame) -> str:
         "PM₂,₅, PM10, NO₂ előrejelzési napokra nem elérhetők — az előrejelzett "
         "pontszámok ezért alsó becslések."
     )
-    kp_missing = 100.0
-    if "Kp_daily_max" in rows.columns:
-        kp_missing = rows["Kp_daily_max"].isna().mean() * 100
-    if kp_missing == 100:
-        notes.append(
-            "A GFZ Potsdam Kp-index forrás 100%-ban hiányzó értékeket ad vissza. "
-            "Nyitott adatforrás-hiba, javítása folyamatban."
-        )
-    else:
-        notes.append(f"A Kp-index hiányaránya ebben az időszakban {kp_missing:.0f}%.")
     if "temperature_2m_max" in rows.columns and (rows["temperature_2m_max"] > 38).any():
         notes.append(
             "Legalább egy napon 38 °C feletti maximum várható. A modell a DTR-t pontozza, "

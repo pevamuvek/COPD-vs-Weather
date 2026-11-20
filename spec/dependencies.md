@@ -31,9 +31,11 @@ python src\main.py
 
 ## Expected outputs
 
-- `data/environmental_data.csv` — merged daily dataset with weather, air quality, Kp, and rolling features
+- `data/environmental_data.csv` — merged daily dataset with weather, air quality, risk score, and rolling features
 - `data/data_quality_report.txt` — text report summarizing completeness and missing data
 - `data/reports/kockázati_jelentés_YYYY-MM-DD.html` — daily Hungarian risk report
+- `data/kp_daily.csv` — optional independent Kp export; see
+  [Independent Kp analysis](kp_analysis.md)
 
 Monthly HTML reports can be generated from the saved CSV without refetching data:
 

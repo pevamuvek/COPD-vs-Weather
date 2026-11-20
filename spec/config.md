@@ -6,7 +6,7 @@ It is intentionally simple: no data fetching or transformation belongs here. Its
 
 - define the Budapest coordinates used by all API calls
 - set a fixed start date and a dynamic end date
-- construct the `data/` directory path relative to `code/`
+- construct the `data/` directory path relative to the repository root
 - create the directory when the module is imported
 - expose output file paths for CSV and report generation
 
@@ -36,6 +36,7 @@ A separate configuration module keeps runtime constants centralized and removes 
 - `REPORT_DIR.mkdir(parents=True, exist_ok=True)`
 - `OUTPUT_CSV = DATA_DIR / "environmental_data.csv"`
 - `OUTPUT_REPORT = DATA_DIR / "data_quality_report.txt"`
+- `OUTPUT_KP_CSV = DATA_DIR / "kp_daily.csv"` — standalone Kp export; not written by the core pipeline
 
 ## Notes
 

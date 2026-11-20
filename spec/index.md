@@ -7,10 +7,12 @@ This directory contains a split specification for the `copd-vs-weather` project.
 - [Overview](overview.md) — project context and architecture
 - [Concept](concept.md) — human-facing project purpose and design
 - [Config](config.md) — constants, date range, and output path setup
-- [Fetchers](fetchers.md) — weather, air quality, geomagnetic index retrieval, and feature engineering
+- [Fetchers](fetchers.md) — weather, air quality, separate Kp retrieval, and feature engineering
 - [Main](main.md) — orchestration, merge strategy, and CSV/report saving
 - [Report](report.md) — quality report generation behavior
 - [HTML risk reports](report_html.md) — daily and monthly standalone report behavior
+- [Risk scoring](spec_score_fix.md) — partial-feature scoring, weights, normalisation, and tiers
+- [Independent Kp analysis](kp_analysis.md) — separate Kp export and future join guardrails
 - [Dependencies](dependencies.md) — runtime environment and execution instructions
 
 ## How to use
@@ -23,3 +25,4 @@ This directory contains a split specification for the `copd-vs-weather` project.
 
 - The generated code must write outputs to `data/` relative to the repository root.
 - The package should include the `src/` modules and HTML stylesheet listed in `overview.md`.
+- `Zzz/` contains historical notes and proposals, not active implementation instructions.

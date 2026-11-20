@@ -1,9 +1,7 @@
-# `score.py` — Partial Feature Scoring
+# `score.py` — Kp-Independent Partial Feature Scoring
 
-This document records the implemented partial-feature scoring behavior. The
-current risk-tier cutoffs are documented in
-[report_html.md](report_html.md#four-tier-display); the earlier three-tier
-thresholds in this historical fix proposal have been replaced.
+This document defines the Kp-independent weighted environmental index,
+including partial-feature scoring and the empirical tier boundaries.
 
 **Project:** copd-vs-weather
 **Scope:** Weighted environmental index; no statistical or machine-learning model
@@ -13,8 +11,9 @@ thresholds in this historical fix proposal have been replaced.
 ## Problem
 
 Forecast rows can have valid weather features (DTR, delta_P, dew_point_2m_mean)
-while AQ and Kp features are unavailable. The partial-scoring behavior below
-allows those rows to be scored using their available features.
+while air-quality features are unavailable. The partial-scoring behavior below
+allows those rows to be scored using their available features. Kp is not an
+input to this score; it is fetched and analyzed independently.
 
 ---
 
@@ -32,17 +31,23 @@ A fully populated row scores on everything.
 
 ### Feature weights
 
-These weights must be preserved exactly — they reflect clinical grounding from Márovics et al. 2024.
+These weights are the previous non-Kp weights divided by their previous total
+of 0.90. They now sum to 1.0; this is a heuristic environmental index, not a
+clinically validated model.
+
+The common normalization of all six weights does not by itself change a row's
+score because the available weights are also rescaled per row. Excluding Kp is
+the change that alters the score. Partial rows still use only their available
+features, so coverage must be considered when interpreting comparisons.
 
 | Feature | Weight |
 |---|---|
-| `delta_P` (absolute value, hPa) | 0.25 |
-| `DTR` (°C) | 0.20 |
-| `dew_point_2m_mean` (°C, inverted — lower is riskier) | 0.15 |
-| `pm2_5` (µg/m³) | 0.15 |
-| `no2` (µg/m³) | 0.10 |
-| `pm10` (µg/m³) | 0.05 |
-| `Kp_daily_max` | 0.10 |
+| `delta_P` (absolute value, hPa) | `5/18` (0.2777777778) |
+| `DTR` (°C) | `2/9` (0.2222222222) |
+| `dew_point_2m_mean` (°C, inverted — lower is riskier) | `1/6` (0.1666666667) |
+| `pm2_5` (µg/m³) | `1/6` (0.1666666667) |
+| `no2` (µg/m³) | `1/9` (0.1111111111) |
+| `pm10` (µg/m³) | `1/18` (0.0555555556) |
 
 ### Normalisation
 
@@ -56,7 +61,6 @@ Each feature is normalised to 0–1 using fixed reference ranges before weightin
 | `pm2_5` | 0 | 75 |
 | `no2` | 0 | 100 |
 | `pm10` | 0 | 150 |
-| `Kp_daily_max` | 0 | 9 |
 
 Clip normalised values to [0, 1] before applying weights.
 
@@ -71,6 +75,9 @@ def compute_row_score(row, feature_weights, feature_ranges):
         value = row.get(feature)
         if value is None or pd.isna(value):
             continue  # skip missing features, do not add weight
+
+        if feature == "delta_P":
+            value = abs(value)
 
         min_val, max_val = feature_ranges[feature]
         normalised = (value - min_val) / (max_val - min_val)
@@ -94,15 +101,18 @@ def compute_row_score(row, feature_weights, feature_ranges):
 
 | Score | Tier | Label |
 |---|---|---|
-| `< 0.220` | `low` | Low Risk |
-| `0.220` to `< 0.300` | `moderate` | Moderate Risk |
-| `0.300` to `0.380` | `high` | High Risk |
-| `> 0.380` | `very_high` | Very High Risk |
+| `< 0.2229342593` | `low` | Low Risk |
+| `0.2229342593` to `< 0.3014978395` | `moderate` | Moderate Risk |
+| `0.3014978395` to `0.3772552469` | `high` | High Risk |
+| `> 0.3772552469` | `very_high` | Very High Risk |
 | NaN | `unknown` | Insufficient data |
 
-The boundaries are anchored to the observed distribution of scores in the
-2015–2026 historical dataset, approximately the 28th, 72nd, and 93rd
-percentiles. They are heuristic thresholds, not clinically validated limits.
+The boundaries are the 28th, 72nd, and 93rd percentiles of the Kp-free score
+computed on 2,516 non-forecast daily rows from 2020-01-01 through 2026-11-20.
+Linear percentile interpolation gives cutoffs of 0.2229342593, 0.3014978395,
+and 0.3772552469. These are distribution-based heuristic thresholds, not
+clinically validated limits. Recalculate and document them if the weights,
+feature ranges, scoring behavior, or historical baseline changes.
 
 ---
 
@@ -121,8 +131,8 @@ percentiles. They are heuristic thresholds, not clinically validated limits.
 When forecast rows are scored on partial features, add a note to the quality report indicating which features were missing. Example:
 
 ```
-2026-06-11: scored on weather features only (pm2_5, pm10, no2, Kp unavailable)
-2026-06-12: scored on weather features only (pm2_5, pm10, no2, Kp unavailable)
+2026-06-11: scored on weather features only (pm2_5, pm10, no2 unavailable)
+2026-06-12: scored on weather features only (pm2_5, pm10, no2 unavailable)
 ```
 
 ---

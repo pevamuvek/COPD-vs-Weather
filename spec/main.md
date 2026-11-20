@@ -25,7 +25,7 @@ The merged dataset is intended to support environmental analysis and possible fu
 ## Imports
 
 - From `config`: `LAT`, `LON`, `LOCATION_LABEL`, `START_DATE`, `END_DATE`, `OUTPUT_CSV`, `OUTPUT_REPORT`, `REPORT_DIR`
-- From `fetchers`: `fetch_weather`, `fetch_air_quality`, `fetch_weather_forecast`, `fetch_kp_index`, `add_rolling_features`
+- From `fetchers`: `fetch_weather`, `fetch_air_quality`, `fetch_weather_forecast`, `add_rolling_features`
 - From `score`: `compute_risk_score`
 - From `html_report`: `generate_daily_html_report`
 - From `report`: `quality_report`
@@ -36,12 +36,10 @@ The merged dataset is intended to support environmental analysis and possible fu
 
 1. Print a clear banner describing the pipeline and date range.
 2. Load datasets by calling the fetcher functions.
-3. Merge the datasets using outer joins on the date index:
-   - `weather` joined with `air quality`
-   - then joined with `Kp` data
+3. Merge weather and air-quality datasets using an outer join on the date index.
 4. Append forecast rows and keep the first value for any duplicated date.
 5. Add rolling means and compute explicit pressure/temperature lag features.
-6. Compute the weighted risk score, risk tier, and risk label.
+6. Compute the Kp-independent weighted risk score, risk tier, and risk label.
 7. Attach the human-readable location label to `df.attrs['location_label']`.
 8. Reorder columns for readability, with base features first and rolling features appended. The current output selection omits the computed pressure/temperature lag columns from the CSV.
 9. Set the index name to `date`.
@@ -49,6 +47,9 @@ The merged dataset is intended to support environmental analysis and possible fu
 11. Generate the quality report at `OUTPUT_REPORT`.
 12. Generate the daily Hungarian HTML risk report in `REPORT_DIR`.
 13. Print summary messages and return the final DataFrame.
+
+Kp is not fetched, merged, scored, or shown in the core pipeline. The separate
+export command and output are documented in [Independent Kp analysis](kp_analysis.md).
 
 Why outer joins?
 

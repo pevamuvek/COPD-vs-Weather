@@ -16,3 +16,4 @@ REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
 OUTPUT_CSV = DATA_DIR / "environmental_data.csv"
 OUTPUT_REPORT = DATA_DIR / "data_quality_report.txt"
+OUTPUT_KP_CSV = DATA_DIR / "kp_daily.csv"

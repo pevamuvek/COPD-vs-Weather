@@ -8,7 +8,7 @@ A family member lives with severe COPD. This project started as a practical ques
 
 ## What this does
 
-The pipeline fetches daily weather, air quality, and geomagnetic data for a configured location, engineers environmental features, computes a composite risk score, and produces text and Hungarian HTML reports suitable for a non-technical reader.
+The core pipeline fetches daily weather and air quality for a configured location, engineers environmental features, computes a composite risk score, and produces text and Hungarian HTML reports suitable for a non-technical reader. Kp is exported separately for independent exploration and is not currently a score input.
 
 The score is a weighted environmental index, not a probability or a prediction of a COPD exacerbation. There is currently no event-labeling strategy or statistical/ML model; those are outside the scope of this version.
 
@@ -22,7 +22,7 @@ Feature design and lag windows are grounded in the **Pécs Study (2024)**, a Hun
 - **Barometric pressure drops** over 24-hour windows are a consistent acute trigger
 - **Lagged effects** are clinically significant: the critical observation window is 2–14 days following an environmental shock
 - **NO₂ and particulate matter** (PM2.5, PM10) interact synergistically with weather fronts
-- **Geomagnetic activity (Kp index)** — added as a candidate co-factor based on geophysics background; its role in physiological stress responses is under-researched and worth monitoring
+- **Geomagnetic activity (Kp index)** — retained as an independent exploratory dataset; it is not currently included in the score because its role in physiological stress responses is uncertain
 
 This is not a generic weather-health dashboard. Feature selection reflects what the literature says matters, not what was easiest to compute.
 
@@ -31,28 +31,20 @@ This is not a generic weather-health dashboard. Feature selection reflects what 
 ## Pipeline architecture
 
 ```
-Environmental APIs
-  ├── Open-Meteo (historical + forecast)       → fetchers.py
-  └── Open-Meteo Air Quality + GFZ Kp          → fetchers.py
-          │
-          ▼
-    Feature Engineering                         → fetchers.py
-      ├── ΔP  (barometric pressure Δ, 24h)
-      ├── DTR (diurnal temperature range)
-      ├── Dew point
-      ├── Computes pressure lags (2, 5, 7, 14 days) and DTR lags (2, 7, 14 days)
-      └── Rolling means (3, 7, 14 days) for pollution and Kp
-          │
-          ▼
-    Risk Scoring                                → score.py
-      └── Composite 0–1 score → Low / Moderate / High / Very High tier
-          │
-          ▼
-    Reports                                     → report.py + html_report.py
-      ├── Data-quality text output
-      ├── Daily Hungarian HTML report
-      └── Optional 30-day HTML overview
+Core environmental pipeline
+  Open-Meteo weather + forecast ─┐
+  Open-Meteo Air Quality ─────────┴─→ Feature engineering → Risk score → Reports
+                                      ΔP, DTR, dew point,   score.py    text + HTML
+                                      pressure/DTR lags,
+                                      pollution rolling means
+
+Independent exploration
+  GFZ Potsdam Kp → kp_analysis.py → data/kp_daily.csv
 ```
+
+Run `python src\kp_analysis.py` separately to write daily Kp summaries to
+`data/kp_daily.csv`. The Kp dataset is not automatically joined to the core
+environmental output.
 
 ---
 
@@ -86,17 +78,7 @@ The feature builder computes explicit lag columns for selected pressure and temp
 
 ### Risk score and tiers
 
-The current score is a weighted combination of normalized environmental indicators, rescaled over the features available on each day. It is not a probability, a clinical threshold, or a validated prediction. Tier cutoffs are anchored to the observed distribution of scores in the 2015–2026 historical dataset, not to clinical outcomes:
-
-| Tier | Score |
-|---|---|
-| Low | `< 0.220` |
-| Moderate | `0.220` to `< 0.300` |
-| High | `0.300` to `0.380` |
-| Very High | `> 0.380` |
-| Unknown | Score unavailable |
-
-These cutoffs are heuristic and require further evaluation; the event count is low, and a strategy for connecting environmental data to clinical events has not yet been defined.
+The current score is a Kp-independent weighted combination of normalized weather and air-quality indicators, rescaled over the features available on each day. Its six base weights sum to 1.0; because scoring also rescales over the features present on each row, that common normalization alone does not change the score. Removing Kp does change the score. The result is not a probability, clinical threshold, or validated prediction. The tier cutoffs use the 28th, 72nd, and 93rd percentiles of the Kp-free score in the 2,516 non-forecast days from 2020-01-01 through 2026-11-20. Exact weights, cutoffs, and their calibration basis are in the [risk-scoring specification](./spec/spec_score_fix.md).
 
 ---
 
@@ -107,7 +89,7 @@ These cutoffs are heuristic and require further evaluation; the event count is l
 | Open-Meteo Historical Weather API | Temperature, pressure, humidity, dew point, wind | Free, no key |
 | Open-Meteo Air Quality API | PM2.5, PM10, NO₂ | Free, no key |
 | Open-Meteo Forecast API | 1–3 day forecast for risk preview | Free, no key |
-| GFZ Potsdam Kp index | 3-hourly geomagnetic index, aggregated by UTC day | Free |
+| GFZ Potsdam Kp index | 3-hourly geomagnetic index, exported separately and aggregated by UTC day | Free |
 | Open-Meteo Geocoding API | City-name location lookup; not available in this public repository yet | Free, no key |
 
 Clinical event records and EESZT discharge summaries are not fetched or processed by this pipeline. Any future use of patient-derived data would require appropriate privacy controls and local handling.
@@ -128,7 +110,8 @@ Event labeling, a modeling approach, and an evaluation strategy remain future wo
 copd-vs-weather/
 ├── src/
 │   ├── config.py               # Location, date range, output paths
-│   ├── fetchers.py             # Environmental APIs and derived features
+│   ├── fetchers.py             # Weather, air-quality, and Kp fetchers/features
+│   ├── kp_analysis.py          # Standalone Kp export
 │   ├── score.py                # Composite risk scoring (0–1, four tiers)
 │   ├── report.py               # Text quality report generation
 │   ├── html_report.py          # Daily/monthly HTML report generation
@@ -196,7 +179,6 @@ Feedback, ideas, and contributions are welcome — see open issues or start a di
 - It is not a clinical decision support tool and should not be used as one
 - It does not replace medical advice
 - This is a private study project built by someone who is not a doctor — treat it accordingly
-- The weighted score is an environmental indicator, not a COPD prediction and not a clinical decision-support tool
 
 The scope is intentionally narrow; the score and its clinical relevance still require evaluation.
 

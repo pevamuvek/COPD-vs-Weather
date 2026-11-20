@@ -62,7 +62,6 @@ def quality_report(df, path):
     lines.append("")
     lines.append("Notes:")
     lines.append("  delta_P row 0 is NaN by design (no prior day).")
-    lines.append("  Kp NaN = GFZ source unavailable; add manually if needed.")
     lines.append("  Rolling windows use min_periods=1 to avoid leading NaNs.")
 
     # Compute 30-day mean for trend arrows

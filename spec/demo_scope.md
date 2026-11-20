@@ -10,13 +10,17 @@ and as a README section for GitHub.
 
 The demo pipeline runs once and produces four outputs:
 
-1. `data/environmental_data.csv` — historical + 2-day forecast, all features including
-   `risk_score`, `risk_tier`, and `is_forecast`.
-2. `data/data_quality_report.txt` — completeness table plus a plain-language
-   3-row risk summary for today + 2 days ahead.
+1. `data/environmental_data.csv` — historical data plus up to two forecast days,
+   selected weather and air-quality features, `risk_score`, `risk_tier`, and
+   `is_forecast`. Pressure and DTR lag columns are computed but currently omitted
+   from this CSV; Kp is exported separately.
+2. `data/data_quality_report.txt` — completeness table, forecast-row count,
+   date/score/tier table for available forecast rows, feature-coverage notes,
+   and a primary-driver note when a forecast score is available.
 3. `data/reports/kockázati_jelentés_YYYY-MM-DD.html` — a Hungarian daily risk
    report covering the previous seven days, today, and up to two forecast days.
-4. Console output — a short human-readable summary printed at the end of `main.py`.
+4. Console output — pipeline progress and an echo of the text quality report
+   (the same report is saved as output 2).
 
 No web server, no database, no trained model, no login.
 
@@ -32,21 +36,20 @@ looks risky for a COPD patient living in Budapest.
 python src\main.py
 ```
 
-**What they see at the end of the run:**
+**What they see at the end of the run:** The console shows the quality report's
+date/score/tier table for available forecast rows, feature-coverage notes, and
+a primary-driver note. It does not print a separate Today/Tomorrow outlook.
+Under the current tier cutoffs, example scores map as follows: `0.20` → LOW,
+`0.28` → MODERATE, and `0.51` or `0.72` → VERY HIGH.
 
-```
---- Risk outlook ---
-Today (2025-06-01):   LOW      0.28  Conditions stable
-Tomorrow (2025-06-02): MODERATE 0.51  Pressure drop expected (-3.1 hPa)
-Day after (2025-06-03): HIGH    0.72  Pressure drop + elevated PM2.5
-```
-
-**What they do with it:** Check before planning outdoor activity or deciding
-whether to have medication at hand.
+**What they do with it:** Use the environmental information as context for
+reviewing conditions. It is not a basis for medication changes or other medical
+decisions.
 
 **Requirements to support this audience:**
-- The console output must be readable without opening any file.
-- Risk labels must be in plain language, not variable names.
+- The console quality report must be readable without opening a file.
+- It must show dates, risk scores, tiers, feature-coverage notes, and the
+  primary-driver note when available.
 - The location label from `config.py` must appear in the output so it is clear
   whose address the data refers to.
 

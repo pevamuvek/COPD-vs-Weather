@@ -18,11 +18,25 @@ from fetchers import (  # noqa: E402
     _daily_kp,
     _fetch_kp_json,
     _parse_kp_bulk,
+    add_rolling_features,
     fetch_kp_index,
 )
 
 
 class KpFetcherTests(unittest.TestCase):
+    def test_core_rolling_features_do_not_derive_kp_columns(self):
+        frame = pd.DataFrame(
+            {
+                "pm2_5": [1.0, 2.0],
+                "Kp_daily_max": [3.0, 4.0],
+            }
+        )
+
+        result = add_rolling_features(frame)
+
+        self.assertIn("pm2_5_roll3d", result.columns)
+        self.assertNotIn("Kp_daily_max_roll3d", result.columns)
+
     def test_bulk_parser_uses_decimal_values_and_utc_timestamps(self):
         text = "\n".join(
             [

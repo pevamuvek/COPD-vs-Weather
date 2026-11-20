@@ -129,7 +129,6 @@ tbody tr.week-start td { border-top: 2px solid var(--border); }
 .driver-pm { background: var(--blue); }
 .driver-dp { background: var(--purple); }
 .driver-dew { background: #72C3DC; }
-.driver-kp { background: #98A2B3; }
 .driver-value { color: var(--muted); font: 12px "JetBrains Mono", monospace; text-align: right; }
 .driver-pair { display: grid; gap: 3px; }
 .driver-peak { opacity: .45; }

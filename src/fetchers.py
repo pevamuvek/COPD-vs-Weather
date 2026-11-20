@@ -254,8 +254,8 @@ def fetch_kp_index(start: str, end: str) -> pd.DataFrame:
 
 
 def add_rolling_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Add 3/7/14-day rolling means for pollution and Kp, plus lag columns for shock features."""
-    cols = [c for c in ["pm2_5", "pm10", "no2", "Kp_daily_max"] if c in df.columns]
+    """Add 3/7/14-day pollution means and pressure/temperature shock lags."""
+    cols = [c for c in ["pm2_5", "pm10", "no2"] if c in df.columns]
     for col in cols:
         for window in [3, 7, 14]:
             df[f"{col}_roll{window}d"] = df[col].rolling(window, min_periods=1).mean()

@@ -12,7 +12,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CSV_PATH = PROJECT_ROOT / "data" / "environmental_data.csv"
 REQUIRED_COLUMNS = {"risk_score", "risk_tier"}
 ALLOWED_TIERS = {"low", "moderate", "high", "very_high", "unknown"}
-RISK_CUTOFFS = (0.220, 0.300, 0.380)
+RISK_CUTOFFS = (0.2229342593, 0.3014978395, 0.3772552469)
 
 
 def expected_risk_tier(score: float) -> str:

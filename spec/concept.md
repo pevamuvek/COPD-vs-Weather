@@ -14,9 +14,12 @@ The project combines multiple environmental data streams around a fixed resident
 
 - historical weather observations from Open-Meteo
 - air quality measurements from Open-Meteo
-- geomagnetic activity from GFZ Potsdam’s Kp index
 
-All data is aligned as daily time series so it can be compared with COPD hospitalization risk windows.
+Geomagnetic activity from GFZ Potsdam’s Kp index is fetched and explored
+separately. It is not part of the core environmental dataset or risk score
+until its contribution and presentation have been evaluated.
+
+Core weather and air-quality data are aligned as daily time series for environmental analysis. Kp is stored separately and is not joined to the core data or score.
 
 ## Clinical workflow context
 
@@ -35,9 +38,8 @@ The pipeline is designed to capture environmental stressors that matter for resp
 - `ΔP` (barometric pressure change over 24 hours) as a pressure shock indicator
 - `DTR` (diurnal temperature range) to reflect temperature fluctuation stress
 - dew point to capture humid heat and thermal comfort effects
-- rolling averages over 3, 7, and 14 days applied to pollution and geomagnetic indicators; explicit lag columns for pressure and temperature shocks
+- rolling averages over 3, 7, and 14 days applied to pollution indicators; explicit lag columns for pressure and temperature shocks
 - air pollution indicators for PM2.5, PM10, and NO₂
-- daily Kp-derived geomagnetic activity summaries to test secondary stressor hypotheses
 
 ## Scientific motivation
 

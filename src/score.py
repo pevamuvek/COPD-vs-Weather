@@ -8,15 +8,14 @@ suitable for non-technical users and public dashboard display.
 import pandas as pd
 import numpy as np
 
-# Feature weights (reflecting clinical grounding from Márovics et al. 2024)
+# Non-Kp weights renormalized from the previous 0.90 total.
 RISK_WEIGHTS = {
-    "delta_P": 0.25,
-    "DTR": 0.20,
-    "dew_point_2m_mean": 0.15,
-    "pm2_5": 0.15,
-    "no2": 0.10,
-    "pm10": 0.05,
-    "Kp_daily_max": 0.10,
+    "delta_P": 5 / 18,
+    "DTR": 2 / 9,
+    "dew_point_2m_mean": 1 / 6,
+    "pm2_5": 1 / 6,
+    "no2": 1 / 9,
+    "pm10": 1 / 18,
 }
 
 # Fixed reference ranges for normalization [min, max]
@@ -27,7 +26,6 @@ FEATURE_RANGES = {
     "pm2_5": (0, 75),
     "no2": (0, 100),
     "pm10": (0, 150),
-    "Kp_daily_max": (0, 9),
 }
 
 RISK_TIER_LABELS = {
@@ -38,8 +36,8 @@ RISK_TIER_LABELS = {
     "unknown": "Insufficient data",
 }
 
-# Empirically derived boundaries for the 4-tier hybrid risk model.
-RISK_CUTOFFS = (0.220, 0.300, 0.380)
+# Historical 28th, 72nd, and 93rd percentiles for the Kp-free score.
+RISK_CUTOFFS = (0.2229342593, 0.3014978395, 0.3772552469)
 
 
 def classify_risk_score(score):

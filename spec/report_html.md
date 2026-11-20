@@ -31,7 +31,7 @@ days plus today) and up to two subsequent forecast rows. It contains:
 2. a detailed table with DTR and pressure flags;
 3. risk-score-consistent driver contribution bars;
 4. a short Hungarian narrative and forecast-data caveat;
-5. Kp coverage, extreme-heat, wellbeing, and clinical-disclaimer notes.
+5. extreme-heat, wellbeing, and clinical-disclaimer notes.
 
 Forecast rows are highlighted when their tier is `moderate`, `high`, or
 `very_high`, when DTR is at least 13 °C, or when absolute pressure change is at
@@ -44,22 +44,13 @@ cards, ISO-week aggregation, a full detail table, CSS-only risk/PM/DTR trends,
 automatically detected notable events, average/peak driver bars, and a wellbeing
 comparison prompt.
 
-## Four-tier display
+## Tier display
 
-| Tier | Hungarian label | Range |
-|---|---|---|
-| `low` | Alacsony | `< 0.220` |
-| `moderate` | Mérsékelt | `0.220` to `< 0.300` |
-| `high` | Magas | `0.300` to `0.380` |
-| `very_high` | Nagyon magas | `> 0.380` |
-| `unknown` | Ismeretlen | missing score |
-
-The HTML generator derives display tiers from `risk_score` through the production
-classifier. The cutoffs are anchored to the observed score distribution in the
-2015–2026 historical dataset (approximately the 28th, 72nd, and 93rd
-percentiles); they are heuristic thresholds, not clinically validated limits.
-Driver text and bars use the same fixed feature normalization and partial-weight
-rescaling as `score.py`.
+The HTML generator derives display tiers from `risk_score` through the
+production classifier. The canonical tier names, cutoffs, and calibration
+basis are defined in [Risk scoring](spec_score_fix.md). Driver text and bars
+use the same fixed feature normalization and partial-weight rescaling as
+`score.py`.
 
 ## Formatting and safety
 

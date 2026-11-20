@@ -26,11 +26,23 @@ The quality report should be easy to read and should clearly show which columns 
    - missing percentage
 3. Add explanatory notes for known dataset characteristics:
    - `delta_P` is NaN on the first row because the value needs a prior day
-   - `Kp` may be missing if the GFZ source was unavailable
    - rolling features are computed with `min_periods=1`
-4. Print the report text to stdout for immediate feedback.
-5. Write the report to the provided `path` using UTF-8 encoding.
-6. Print the saved path after writing.
+4. If `risk_score` is present, add a `FORECAST AND RISK SUMMARY` section after the completeness table:
+   - report the number of rows with `is_forecast == True`
+   - display `Date`, `Risk score`, and `Tier` for up to the first three forecast rows, sorted by date
+   - if there are no forecast rows, display the last three rows sorted by date
+   - identify unavailable features for forecast rows and retain the partial-score data coverage behavior specified in [spec_score_fix.md](spec_score_fix.md)
+   - on the highest-scoring row in the selected table, identify the single feature with the largest normalized weighted contribution to the score and include a one-line plain-language driver note
+5. If `risk_score` is absent, omit the forecast and risk summary section silently.
+6. Print the report text to stdout for immediate feedback.
+7. Write the report to the provided `path` using UTF-8 encoding.
+8. Print the saved path after writing.
+
+The driver note must describe the primary available contributor, not the raw highest-weight feature when that feature is missing or has a lower normalized component. For pressure, include the signed `delta_P` value in hPa. Example:
+
+```text
+Elevated risk expected. Pressure change of -4.2 hPa is the primary driver.
+```
 
 Why UTF-8?
 

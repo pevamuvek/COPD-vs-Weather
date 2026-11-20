@@ -11,6 +11,8 @@ For a concept-level explanation of the clinical context, data sources, and scien
 - [Concept](concept.md)
 - [Config](config.md)
 - [Fetchers](fetchers.md)
+- [Risk scoring](spec_score_fix.md)
+- [Independent Kp analysis](kp_analysis.md)
 - [Main](main.md)
 - [Report](report.md)
 - [HTML risk reports](report_html.md)
@@ -23,6 +25,7 @@ The regenerated project must include the following files:
 - `src/__init__.py`
 - `src/config.py`
 - `src/fetchers.py`
+- `src/kp_analysis.py`
 - `src/score.py`
 - `src/report.py`
 - `src/html_report.py`
