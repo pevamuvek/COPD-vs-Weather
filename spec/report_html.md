@@ -48,7 +48,7 @@ comparison prompt.
 
 The HTML generator derives display tiers from `risk_score` through the
 production classifier. The canonical tier names, cutoffs, and calibration
-basis are defined in [Risk scoring](spec_score_fix.md). Driver text and bars
+basis are defined in [Risk scoring](score.md). Driver text and bars
 use the same fixed feature normalization and partial-weight rescaling as
 `score.py`.
 

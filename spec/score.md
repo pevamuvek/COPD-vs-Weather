@@ -1,4 +1,4 @@
-# `score.py` — Kp-Independent Partial Feature Scoring
+# `score.py` — Kp-Independent Risk Scoring
 
 This document defines the Kp-independent weighted environmental index,
 including partial-feature scoring and the empirical tier boundaries.

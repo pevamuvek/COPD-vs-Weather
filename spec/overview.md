@@ -11,7 +11,7 @@ For a concept-level explanation of the clinical context, data sources, and scien
 - [Concept](concept.md)
 - [Config](config.md)
 - [Fetchers](fetchers.md)
-- [Risk scoring](spec_score_fix.md)
+- [Risk scoring](score.md)
 - [Independent Kp analysis](kp_analysis.md)
 - [Main](main.md)
 - [Report](report.md)

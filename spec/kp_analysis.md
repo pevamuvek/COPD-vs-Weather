@@ -39,4 +39,4 @@ The regular `python src\main.py` run does not fetch or join Kp.
 
 - [Fetchers](fetchers.md)
 - [Main](main.md)
-- [Risk scoring](spec_score_fix.md)
+- [Risk scoring](score.md)

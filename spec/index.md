@@ -11,7 +11,7 @@ This directory contains a split specification for the `copd-vs-weather` project.
 - [Main](main.md) — orchestration, merge strategy, and CSV/report saving
 - [Report](report.md) — quality report generation behavior
 - [HTML risk reports](report_html.md) — daily and monthly standalone report behavior
-- [Risk scoring](spec_score_fix.md) — partial-feature scoring, weights, normalisation, and tiers
+- [Risk scoring](score.md) — partial-feature scoring, weights, normalisation, and tiers
 - [Independent Kp analysis](kp_analysis.md) — separate Kp export and future join guardrails
 - [Dependencies](dependencies.md) — runtime environment and execution instructions
 

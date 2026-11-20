@@ -78,7 +78,7 @@ The feature builder computes explicit lag columns for selected pressure and temp
 
 ### Risk score and tiers
 
-The current score is a Kp-independent weighted combination of normalized weather and air-quality indicators, rescaled over the features available on each day. Its six base weights sum to 1.0; because scoring also rescales over the features present on each row, that common normalization alone does not change the score. Removing Kp does change the score. The result is not a probability, clinical threshold, or validated prediction. The tier cutoffs use the 28th, 72nd, and 93rd percentiles of the Kp-free score in the 2,516 non-forecast days from 2020-01-01 through 2026-11-20. Exact weights, cutoffs, and their calibration basis are in the [risk-scoring specification](./spec/spec_score_fix.md).
+The current score is a Kp-independent weighted combination of normalized weather and air-quality indicators, rescaled over the features available on each day. Its six base weights sum to 1.0; because scoring also rescales over the features present on each row, that common normalization alone does not change the score. Removing Kp does change the score. The result is not a probability, clinical threshold, or validated prediction. The tier cutoffs use the 28th, 72nd, and 93rd percentiles of the Kp-free score in the 2,516 non-forecast days from 2020-01-01 through 2026-11-20. Exact weights, cutoffs, and their calibration basis are in the [risk-scoring specification](./spec/score.md).
 
 ---
 

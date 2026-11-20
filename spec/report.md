@@ -31,7 +31,7 @@ The quality report should be easy to read and should clearly show which columns 
    - report the number of rows with `is_forecast == True`
    - display `Date`, `Risk score`, and `Tier` for up to the first three forecast rows, sorted by date
    - if there are no forecast rows, display the last three rows sorted by date
-   - identify unavailable features for forecast rows and retain the partial-score data coverage behavior specified in [spec_score_fix.md](spec_score_fix.md)
+   - identify unavailable features for forecast rows and retain the partial-score data coverage behavior specified in [Risk scoring](score.md)
    - on the highest-scoring row in the selected table, identify the single feature with the largest normalized weighted contribution to the score and include a one-line plain-language driver note
 5. If `risk_score` is absent, omit the forecast and risk summary section silently.
 6. Print the report text to stdout for immediate feedback.
