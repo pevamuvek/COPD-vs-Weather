@@ -8,7 +8,7 @@ A family member lives with severe COPD. This project started as a practical ques
 
 ## What this does
 
-The core pipeline fetches daily weather and air quality for a configured location, engineers environmental features, computes a composite risk score, and produces text and Hungarian HTML reports suitable for a non-technical reader. Kp is exported separately for independent exploration and is not currently a score input.
+The core pipeline resolves an area-level place name or postcode, fetches daily weather and air quality, engineers environmental features, computes a composite risk score, and produces text and Hungarian HTML reports suitable for a non-technical reader. Kp is exported separately for independent exploration and is not currently a score input.
 
 The score is a weighted environmental index, not a probability or a prediction of a COPD exacerbation. There is currently no event-labeling strategy or statistical/ML model; those are outside the scope of this version.
 
@@ -90,7 +90,7 @@ The current score is a Kp-independent weighted combination of normalized weather
 | Open-Meteo Air Quality API | PM2.5, PM10, NO₂ | Free, no key |
 | Open-Meteo Forecast API | 1–3 day forecast for risk preview | Free, no key |
 | GFZ Potsdam Kp index | 3-hourly geomagnetic index, exported separately and aggregated by UTC day | Free |
-| Open-Meteo Geocoding API | City-name location lookup; not available in this public repository yet | Free, no key |
+| Open-Meteo Geocoding API | City, district or postcode location lookup | Free, no key |
 
 Clinical event records and EESZT discharge summaries are not fetched or processed by this pipeline. Any future use of patient-derived data would require appropriate privacy controls and local handling.
 
@@ -110,6 +110,7 @@ Event labeling, a modeling approach, and an evaluation strategy remain future wo
 copd-vs-weather/
 ├── src/
 │   ├── config.py               # Location, date range, output paths
+│   ├── location.py             # Place-name and postcode resolution
 │   ├── fetchers.py             # Weather, air-quality, and Kp fetchers/features
 │   ├── kp_analysis.py          # Standalone Kp export
 │   ├── score.py                # Composite risk scoring (0–1, four tiers)
@@ -126,6 +127,17 @@ copd-vs-weather/
 
 ---
 
+## Location & privacy
+
+The pipeline resolves an area-level location from a city, district or postcode.
+It does not accept or infer street addresses. Resolved coordinates are rounded
+to two decimal places before use or logging. Reports show only the chosen place
+label, never coordinates.
+
+For private local use, coordinates and timezone may be set with
+`COPD_LAT`, `COPD_LON`, and `COPD_TZ` environment variables. Keep those values
+out of the repository.
+
 ## Running locally
 
 ```bash
@@ -135,12 +147,17 @@ python -m venv .venv
 source .venv/bin/activate        # or .venv\Scripts\activate on Windows
 pip install requests pandas numpy
 
-# Run the pipeline for the location configured in src/config.py
+# Resolve a place interactively
 python src/main.py
 
+# Or provide a place or coordinates explicitly
+python src/main.py --place "Springfield"
+python src/main.py --lat 12.50 --lon -67.80 --tz UTC
+
 # Rebuild reports from the existing CSV without refetching data
-python src/html_report.py daily
-python src/html_report.py monthly
+python src/html_report.py daily --location-label "Springfield"
+python src/html_report.py monthly --location-label "Springfield"
+python src/html_report.py both --location-label "Springfield"
 ```
 
 No API keys required. All environmental data sources are free and open.
@@ -149,16 +166,20 @@ The pipeline writes:
 
 - `data/environmental_data.csv` — merged daily environmental data and scores
 - `data/data_quality_report.txt` — coverage, missing-data, and risk summary
-- `data/reports/kockázati_jelentés_YYYY-MM-DD.html` — Hungarian daily report
+- `data/reports/kockázati_jelentés_10nap_<code>_YYYY-MM-DD.html` — 10-day Hungarian report
+- `data/reports/kockázati_jelentés_30nap_<code>_YYYY-MM.html` — 30-day Hungarian report
+
+The three-letter filename code comes from the place name; the report itself
+shows the place label, including the postcode when available.
 
 ---
 
-## Current pipeline and future public demo
+## Current local pipeline and future public demo
 
-| | Current configured pipeline | Future public demo |
+| | Current local pipeline | Future public demo |
 |---|---|---|
-| Location | Coordinates and label set in `src/config.py` | City-name lookup is not available in this repository yet |
-| Output | CSV, quality text, and Hungarian daily/monthly HTML reports | Not available yet |
+| Location | Resolve a city, district, or postcode at runtime; street addresses are not accepted; coordinates are rounded to two decimals | No browser-based location lookup yet |
+| Output | CSV, quality text, and Hungarian 10-day/30-day HTML reports | Not available yet |
 | Hosting | Local | Not available yet |
 | Audience | Personal environmental monitoring and analysis | Future open-science use |
 
@@ -197,9 +218,9 @@ The following are documented and out of scope for the current demo phase:
 
 ## Why this exists
 
-Two important living creatures in my life have COPD — my father and, over 18 years of horse ownership, several horses. With both, the experience is the same: you watch them fight for air when conditions turn bad, and most of what medicine offers is symptom management after the fact. Prevention is maybe 30% of the picture, and even then you're tweaking between two low points without knowing for certain what the triggers actually are — because there can be thousands, and it's always their combination that matters.
+A number of important living creatures in my life have COPD — family members, friends and, over 30 years of equestrian experience, several horses. Both in human and horse often times the experience is the same: you watch them fight for air when conditions turn bad, and most of what medicine offers is symptom management after the fact. Prevention is maybe 30% of the picture, and even then you're tweaking between two low points without knowing for certain what the triggers actually are — because there can be thousands, and it's always their combination that matters.
 
-My father is a weather-curious engineer. Over years of living with COPD, he compiled his own observations: weather front situations challenge his wellbeing, and once a negative spiral starts, it tends to end in hospitalisation — three or four times a year over the past three years. He lives alone. He's not one to ask for help. He's also a former small aircraft pilot, which means he's far more likely to check a weather forecast than change his habits.
+Involved family member is a weather-curious engineer. Over years of living with COPD, he compiled his own observations: weather front situations challenge his wellbeing, and once a negative spiral starts, it tends to end in hospitalisation — three or four times a year over the past three years. He lives alone. He's not one to ask for help. He's also a former small aircraft pilot, which means he's far more likely to check a weather forecast than change his habits.
 
 His doctor's approach gave me the framing: when the spiral starts, adjust medication early — before hitting rock bottom, before calling an ambulance. The question this project asks is simply: *can we see the spiral coming?*
 
@@ -221,7 +242,7 @@ All tool usage was directed by human judgment: the domain knowledge, the researc
 
 ## References
 
-Márovics, G., Sándor, B., Sándor, J., Sándor, B., Nagy, S., & Pál, L. (2024). Weather variability and COPD: A risk estimation identified a vulnerable sub-population in Hungary. *PeerJ, 12*, e17255. https://doi.org/10.7717/peerj.17255
+Márovics, G., Sándor, B., Sándor, J., Sándor, B., Nagy, S., & Pál, L. (2024).  Weather Variability and COPD: A Risk Estimation Identified a Vulnerable Sub-population in Hungary. In Vivo, 38(4), 1690–1697. DOI: 10.21873/invivo.13619.
 
 Open-Meteo API documentation: https://open-meteo.com/en/docs
 

@@ -17,7 +17,7 @@ The demo pipeline runs once and produces four outputs:
 2. `data/data_quality_report.txt` — completeness table, forecast-row count,
    date/score/tier table for available forecast rows, feature-coverage notes,
    and a primary-driver note when a forecast score is available.
-3. `data/reports/kockázati_jelentés_YYYY-MM-DD.html` — a Hungarian daily risk
+3. `data/reports/kockázati_jelentés_10nap_<code>_YYYY-MM-DD.html` — a 10-day Hungarian risk
    report covering the previous seven days, today, and up to two forecast days.
 4. Console output — pipeline progress and an echo of the text quality report
    (the same report is saved as output 2).
@@ -62,9 +62,7 @@ run the same pipeline for their own location.
 
 **What they need to change:** The location settings in `config.py`:
 ```python
-LAT = 47.5999       # replace with their coordinates
-LON = 19.0616
-LOCATION_LABEL = "1039 Budapest, Sarkadi Imre utca 6"  # replace with their address
+python src/main.py --place "Springfield"
 ```
 
 **What the README must communicate:**

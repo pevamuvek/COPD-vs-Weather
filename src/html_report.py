@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import re
+import unicodedata
 from datetime import datetime
 from html import escape
 from pathlib import Path
@@ -10,7 +12,7 @@ from typing import Iterable
 
 import pandas as pd
 
-from config import LOCATION_LABEL, OUTPUT_CSV, REPORT_CITY, REPORT_DIR
+from config import OUTPUT_CSV, REPORT_DIR
 from score import (
     FEATURE_RANGES,
     RISK_WEIGHTS,
@@ -29,6 +31,15 @@ TIER_LABELS_HU = {
     "very_high": "Nagyon magas",
     "unknown": "Ismeretlen",
 }
+
+
+def _location_code(location_label: str) -> str:
+    """Derive a three-letter filename code from the place name."""
+    place_name = location_label.split(",", 1)[0].strip()
+    normalized = unicodedata.normalize("NFKD", place_name)
+    ascii_label = normalized.encode("ascii", "ignore").decode("ascii")
+    code = re.sub(r"[^A-Za-z]", "", ascii_label).upper()[:3]
+    return code if len(code) == 3 else "LOC"
 MONTHS_HU = (
     "",
     "jan.",
@@ -455,14 +466,15 @@ def _page(title: str, eyebrow: str, subtitle: str, body: str, footer: str) -> st
 def generate_daily_html_report(
     df: pd.DataFrame,
     output_dir: str | Path = REPORT_DIR,
-    location_label: str = LOCATION_LABEL,
-    report_city: str = REPORT_CITY,
+    location_label: str = "Selected location",
+    report_city: str | None = None,
     generated_at: datetime | None = None,
 ) -> Path:
-    """Generate the 8 historical + 2 forecast daily HTML report."""
+    """Generate the 10-day (8 historical + today + 2 forecast) HTML report."""
     frame = _prepare_frame(df)
     rows, today, forecast = _daily_slice(frame)
     generated_at = generated_at or datetime.now()
+    report_city = report_city or location_label
     subtitle = (
         f"{_hu_date(rows.index[0], True)} – {_hu_date(rows.index[-1], True)} · "
         f"Elmúlt 7 nap + mai nap ({_hu_date(today)}) + 2 napos előrejelzés"
@@ -488,7 +500,7 @@ def generate_daily_html_report(
         f"Helyszín: {location_label} · Adatok: Open-Meteo, GFZ Potsdam"
     )
     html = _page(
-        "Környezeti kockázati jelentés",
+        "10 napos környezeti kockázati jelentés",
         f"copd-vs-weather · {report_city}",
         subtitle,
         body,
@@ -496,7 +508,10 @@ def generate_daily_html_report(
     )
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_dir / f"kockázati_jelentés_{today:%Y-%m-%d}.html"
+    location_code = _location_code(location_label)
+    output_path = output_dir / (
+        f"kockázati_jelentés_10nap_{location_code}_{today:%Y-%m-%d}.html"
+    )
     output_path.write_text(html, encoding="utf-8")
     return output_path
 
@@ -597,14 +612,15 @@ def _monthly_cards(rows: pd.DataFrame) -> str:
 def generate_monthly_html_report(
     df: pd.DataFrame,
     output_dir: str | Path = REPORT_DIR,
-    location_label: str = LOCATION_LABEL,
-    report_city: str = REPORT_CITY,
+    location_label: str = "Selected location",
+    report_city: str | None = None,
     generated_at: datetime | None = None,
 ) -> Path:
-    """Generate a 30-historical-day monthly overview HTML report."""
+    """Generate a 30-historical-day overview HTML report."""
     frame = _prepare_frame(df)
     rows = _monthly_slice(frame)
     generated_at = generated_at or datetime.now()
+    report_city = report_city or location_label
     tiers = rows.apply(_tier, axis=1)
     pm_series = rows.get("pm2_5_roll7d", rows.get("pm2_5", pd.Series(index=rows.index, dtype=float)))
     dtr_series = rows.get("DTR", pd.Series(index=rows.index, dtype=float))
@@ -642,8 +658,8 @@ def generate_monthly_html_report(
         f"Helyszín: {location_label} · Adatok: Open-Meteo, GFZ Potsdam"
     )
     html = _page(
-        "Havi környezeti kockázati áttekintés",
-        f"copd-vs-weather · {report_city} — Havi áttekintés",
+        "30 napos környezeti kockázati áttekintés",
+        f"copd-vs-weather · {report_city} — 30 napos áttekintés",
         subtitle,
         body,
         footer,
@@ -651,7 +667,10 @@ def generate_monthly_html_report(
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     end_date = rows.index[-1]
-    output_path = output_dir / f"havi_jelentés_{end_date:%Y-%m}.html"
+    location_code = _location_code(location_label)
+    output_path = output_dir / (
+        f"kockázati_jelentés_30nap_{location_code}_{end_date:%Y-%m}.html"
+    )
     output_path.write_text(html, encoding="utf-8")
     return output_path
 
@@ -661,14 +680,27 @@ def main() -> int:
     parser.add_argument("period", choices=("daily", "monthly", "both"))
     parser.add_argument("csv_path", nargs="?", type=Path, default=OUTPUT_CSV)
     parser.add_argument("--output-dir", type=Path, default=REPORT_DIR)
+    parser.add_argument(
+        "--location-label",
+        required=True,
+        help="Place label for the report, such as a city or district (no street address)",
+    )
     args = parser.parse_args()
     try:
         df = pd.read_csv(args.csv_path)
         paths = []
         if args.period in {"daily", "both"}:
-            paths.append(generate_daily_html_report(df, args.output_dir))
+            paths.append(generate_daily_html_report(
+                df,
+                args.output_dir,
+                location_label=args.location_label,
+            ))
         if args.period in {"monthly", "both"}:
-            paths.append(generate_monthly_html_report(df, args.output_dir))
+            paths.append(generate_monthly_html_report(
+                df,
+                args.output_dir,
+                location_label=args.location_label,
+            ))
     except (FileNotFoundError, ValueError, pd.errors.EmptyDataError) as exc:
         print(f"HIBA: {exc}")
         return 2

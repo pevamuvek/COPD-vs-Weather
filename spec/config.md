@@ -1,10 +1,10 @@
 ﻿# `config.py`
 
-This module contains the static configuration values and output path setup for the pipeline.
+This module provides runtime location/date resolution and output paths for the pipeline.
 
-It is intentionally simple: no data fetching or transformation belongs here. Its only responsibilities are:
+No data fetching or environmental-data transformation belongs here. Its responsibilities are:
 
-- define the Budapest coordinates used by all API calls
+- resolve a location at runtime through the CLI, environment, or interactive prompt
 - set a fixed start date and a dynamic end date
 - construct the `data/` directory path relative to the repository root
 - create the directory when the module is imported
@@ -17,16 +17,15 @@ A separate configuration module keeps runtime constants centralized and removes 
 ## Imports
 
 - `Path` from `pathlib`
-- `date` from `datetime`
+- `date` and `datetime` from `datetime`
+- `ZoneInfo` from `zoneinfo`
 
 ## Constants
 
-- `LAT = 47.5999`
-- `LON = 19.0616`
-- `LOCATION_LABEL = "1039 Budapest, Sarkadi Imre utca 6"`
-- `REPORT_CITY = "Budapest"`
+- No hardcoded location or default location
 - `START_DATE = "2020-01-01"`
-- `END_DATE = date.today().isoformat()`
+- `END_DATE = date.today().isoformat()` for the independent, global Kp workflow
+- `get_end_date(location)` returns the current date in the resolved location's IANA timezone for the core environmental pipeline
 
 ## Output directory and file paths
 
@@ -40,7 +39,8 @@ A separate configuration module keeps runtime constants centralized and removes 
 
 ## Notes
 
-- `END_DATE` is computed at runtime so the pipeline can be rerun with an up-to-date period without code changes.
+- `END_DATE` is the computer-local current date for the independent Kp workflow.
+- The core environmental pipeline calls `get_end_date(location)` so its requested end date matches the resolved location's local calendar day.
 - Creating `DATA_DIR` on import simplifies execution and avoids directory errors during output writes.
 
 ## Navigation

@@ -7,18 +7,28 @@ Python and pandas dependencies; CSS is embedded into each output file.
 ## Commands
 
 ```powershell
-python src/html_report.py daily
-python src/html_report.py monthly
-python src/html_report.py both
+python src/html_report.py daily --location-label "Springfield"
+python src/html_report.py monthly --location-label "Springfield"
+python src/html_report.py both --location-label "Springfield"
 ```
 
+`both` is the positional period argument; use `python src/html_report.py both`,
+not `python src/html_report.py -both`. The main pipeline writes both reports
+after it saves the CSV. Rebuilding from a CSV requires `--location-label`
+because location labels are not persisted in the CSV or a separate metadata file.
+Use a city, district, or postcode label, not a street address.
+
 An optional CSV path and `--output-dir` may be supplied. The normal pipeline run
-automatically creates the daily report.
+automatically creates both reports with the resolved place label.
 
 ## Outputs
 
-- `data/reports/kockázati_jelentés_YYYY-MM-DD.html`
-- `data/reports/havi_jelentés_YYYY-MM.html`
+- `data/reports/kockázati_jelentés_10nap_<code>_YYYY-MM-DD.html`
+- `data/reports/kockázati_jelentés_30nap_<code>_YYYY-MM.html`
+
+The three-letter code is derived from the first place-name component of the
+label, transliterated to ASCII and uppercased. The full label remains in report
+content; the postcode is appended to the label when geocoding returns one.
 
 The date comes from the last non-forecast row, not the computer clock.
 

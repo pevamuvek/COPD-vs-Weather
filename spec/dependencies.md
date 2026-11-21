@@ -33,14 +33,14 @@ python src\main.py
 
 - `data/environmental_data.csv` — merged daily dataset with weather, air quality, risk score, and rolling features
 - `data/data_quality_report.txt` — text report summarizing completeness and missing data
-- `data/reports/kockázati_jelentés_YYYY-MM-DD.html` — daily Hungarian risk report
+- `data/reports/kockázati_jelentés_10nap_<code>_YYYY-MM-DD.html` — 10-day Hungarian risk report
 - `data/kp_daily.csv` — optional independent Kp export; see
   [Independent Kp analysis](kp_analysis.md)
 
 Monthly HTML reports can be generated from the saved CSV without refetching data:
 
 ```powershell
-python src\html_report.py monthly
+python src\html_report.py monthly --location-label "Springfield"
 ```
 
 ## Notes

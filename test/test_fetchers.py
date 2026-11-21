@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import sys
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pandas as pd
 
@@ -19,8 +21,12 @@ from fetchers import (  # noqa: E402
     _fetch_kp_json,
     _parse_kp_bulk,
     add_rolling_features,
+    fetch_air_quality,
     fetch_kp_index,
+    fetch_weather,
+    fetch_weather_forecast,
 )
+from location import ResolvedLocation  # noqa: E402
 
 
 class KpFetcherTests(unittest.TestCase):
@@ -106,6 +112,56 @@ class KpFetcherTests(unittest.TestCase):
         self.assertEqual(
             list(fetched["datetime"]),
             [pd.Timestamp("2026-01-01 21:00"), pd.Timestamp("2026-01-02 00:00")],
+        )
+
+
+class EnvironmentalFetcherTests(unittest.TestCase):
+    def test_fetchers_pass_location_timezone_and_keep_api_local_dates(self):
+        location = ResolvedLocation(
+            label="Example City, Exampleland, 12345",
+            latitude=12.34,
+            longitude=-56.78,
+            timezone="Pacific/Auckland",
+        )
+        daily = {
+            "time": ["2026-11-21"],
+            "temperature_2m_max": [10.0],
+            "temperature_2m_min": [5.0],
+            "surface_pressure_mean": [1000.0],
+            "dew_point_2m_mean": [3.0],
+            "precipitation_sum": [0.0],
+            "windspeed_10m_max": [1.0],
+        }
+        hourly = {
+            "time": ["2026-11-21T00:00", "2026-11-21T23:00"],
+            "pm2_5": [1.0, 3.0],
+            "pm10": [2.0, 4.0],
+            "nitrogen_dioxide": [5.0, 7.0],
+        }
+        responses = []
+        for payload in (
+            {"daily": daily},
+            {"hourly": hourly},
+            {"daily": {**daily, "time": ["2026-11-22"]}},
+        ):
+            response = Mock()
+            response.json.return_value = payload
+            responses.append(response)
+
+        with patch("fetchers.requests.get", side_effect=responses) as get:
+            with redirect_stdout(StringIO()):
+                weather = fetch_weather(location, "2026-11-21", "2026-11-21")
+                air_quality = fetch_air_quality(location, "2026-11-21", "2026-11-21")
+                forecast = fetch_weather_forecast(location)
+
+        self.assertEqual(weather.index.tolist(), [pd.Timestamp("2026-11-21")])
+        self.assertEqual(air_quality.index.tolist(), [pd.Timestamp("2026-11-21")])
+        self.assertEqual(forecast.index.tolist(), [pd.Timestamp("2026-11-22")])
+        self.assertTrue(
+            all(
+                call.kwargs["params"]["timezone"] == "Pacific/Auckland"
+                for call in get.call_args_list
+            )
         )
 
 

@@ -4,7 +4,7 @@ This document explains the project purpose and design without referring to imple
 
 ## Purpose
 
-The `copd-vs-weather` project is a reproducible environmental data pipeline for a COPD risk analysis study anchored on a single patient location in Budapest.
+The `copd-vs-weather` project is a reproducible environmental data pipeline for a COPD risk analysis study anchored on a user-resolved area-level location.
 
 It is designed to collect and organise daily environmental exposures and compute a transparent daily risk score. It does not perform statistical modeling or machine learning; the risk score is a weighted index intended for human review. The resulting dataset is intended to support later clinical risk analysis, event window labeling, and machine learning.
 

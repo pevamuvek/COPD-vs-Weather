@@ -24,29 +24,30 @@ The merged dataset is intended to support environmental analysis and possible fu
 
 ## Imports
 
-- From `config`: `LAT`, `LON`, `LOCATION_LABEL`, `START_DATE`, `END_DATE`, `OUTPUT_CSV`, `OUTPUT_REPORT`, `REPORT_DIR`
+- From `config`: `get_location`, `get_end_date`, `START_DATE`, `OUTPUT_CSV`, `OUTPUT_REPORT`, `REPORT_DIR`
 - From `fetchers`: `fetch_weather`, `fetch_air_quality`, `fetch_weather_forecast`, `add_rolling_features`
 - From `score`: `compute_risk_score`
-- From `html_report`: `generate_daily_html_report`
+- From `html_report`: `generate_daily_html_report`, `generate_monthly_html_report`
 - From `report`: `quality_report`
 
 ## Behavior
 
 ### `main()`
 
-1. Print a clear banner describing the pipeline and date range.
-2. Load datasets by calling the fetcher functions.
-3. Merge weather and air-quality datasets using an outer join on the date index.
-4. Append forecast rows and keep the first value for any duplicated date.
-5. Add rolling means and compute explicit pressure/temperature lag features.
-6. Compute the Kp-independent weighted risk score, risk tier, and risk label.
-7. Attach the human-readable location label to `df.attrs['location_label']`.
-8. Reorder columns for readability, with base features first and rolling features appended. The current output selection omits the computed pressure/temperature lag columns from the CSV.
-9. Set the index name to `date`.
-10. Write the merged dataset to `OUTPUT_CSV`.
-11. Generate the quality report at `OUTPUT_REPORT`.
-12. Generate the daily Hungarian HTML risk report in `REPORT_DIR`.
-13. Print summary messages and return the final DataFrame.
+1. Resolve the location and its local current date before fetching any data.
+2. Print a clear banner describing the pipeline and location-local date range.
+3. Load datasets by calling the fetcher functions.
+4. Merge weather and air-quality datasets using an outer join on the date index.
+5. Append forecast rows and keep the first value for any duplicated date.
+6. Add rolling means and compute explicit pressure/temperature lag features.
+7. Compute the Kp-independent weighted risk score, risk tier, and risk label.
+8. Attach the human-readable location label to `df.attrs['location_label']`.
+9. Reorder columns for readability, with base features first and rolling features appended. The current output selection omits the computed pressure/temperature lag columns from the CSV.
+10. Set the index name to `date`.
+11. Write the merged dataset to `OUTPUT_CSV`.
+12. Generate the quality report at `OUTPUT_REPORT`.
+13. Generate the 10-day and 30-day Hungarian HTML reports in `REPORT_DIR`.
+14. Print summary messages and return the final DataFrame.
 
 Kp is not fetched, merged, scored, or shown in the core pipeline. The separate
 export command and output are documented in [Independent Kp analysis](kp_analysis.md).

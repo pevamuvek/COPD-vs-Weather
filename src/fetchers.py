@@ -2,6 +2,7 @@ import requests
 import pandas as pd
 import numpy as np
 import time
+from location import ResolvedLocation
 
 KP_URL = "https://kp.gfz.de/app/files/Kp_ap_Ap_SN_F107_since_1932.txt"
 KP_FALLBACK_URL = (
@@ -10,13 +11,13 @@ KP_FALLBACK_URL = (
 KP_COLUMNS = ["Kp_daily_max", "Kp_daily_mean", "Kp_n", "Kp_daily_sum"]
 
 
-def fetch_weather(lat: float, lon: float, start: str, end: str) -> pd.DataFrame:
+def fetch_weather(location: ResolvedLocation, start: str, end: str) -> pd.DataFrame:
     """Daily weather: temperature min/max, surface pressure, dew point."""
     print("  → Fetching weather data from Open-Meteo…")
     url = "https://archive-api.open-meteo.com/v1/archive"
     params = {
-        "latitude":  lat,
-        "longitude": lon,
+        "latitude":  location.latitude,
+        "longitude": location.longitude,
         "start_date": start,
         "end_date":   end,
         "daily": [
@@ -27,7 +28,7 @@ def fetch_weather(lat: float, lon: float, start: str, end: str) -> pd.DataFrame:
             "precipitation_sum",
             "windspeed_10m_max",
         ],
-        "timezone": "Europe/Budapest",
+        "timezone": location.timezone,
     }
     r = requests.get(url, params=params, timeout=60)
     r.raise_for_status()
@@ -43,17 +44,17 @@ def fetch_weather(lat: float, lon: float, start: str, end: str) -> pd.DataFrame:
     return df.set_index("date")
 
 
-def fetch_air_quality(lat: float, lon: float, start: str, end: str) -> pd.DataFrame:
+def fetch_air_quality(location: ResolvedLocation, start: str, end: str) -> pd.DataFrame:
     """Daily air quality: PM2.5, PM10, NO₂ (hourly → daily mean)."""
     print("  → Fetching air quality data from Open-Meteo…")
     url = "https://air-quality-api.open-meteo.com/v1/air-quality"
     params = {
-        "latitude":   lat,
-        "longitude":  lon,
+        "latitude":   location.latitude,
+        "longitude":  location.longitude,
         "start_date": start,
         "end_date":   end,
         "hourly": ["pm2_5", "pm10", "nitrogen_dioxide"],
-        "timezone": "Europe/Budapest",
+        "timezone": location.timezone,
     }
     r = requests.get(url, params=params, timeout=60)
     r.raise_for_status()
@@ -72,13 +73,13 @@ def fetch_air_quality(lat: float, lon: float, start: str, end: str) -> pd.DataFr
     return df_daily
 
 
-def fetch_weather_forecast(lat: float, lon: float, days: int = 3) -> pd.DataFrame:
+def fetch_weather_forecast(location: ResolvedLocation, days: int = 3) -> pd.DataFrame:
     """Daily weather forecast: extends today's data 1–2 days ahead."""
     print("  → Fetching weather forecast from Open-Meteo…")
     url = "https://api.open-meteo.com/v1/forecast"
     params = {
-        "latitude":  lat,
-        "longitude": lon,
+        "latitude":  location.latitude,
+        "longitude": location.longitude,
         "daily": [
             "temperature_2m_max",
             "temperature_2m_min",
@@ -88,7 +89,7 @@ def fetch_weather_forecast(lat: float, lon: float, days: int = 3) -> pd.DataFram
             "windspeed_10m_max",
         ],
         "forecast_days": days,
-        "timezone": "Europe/Budapest",
+        "timezone": location.timezone,
     }
     r = requests.get(url, params=params, timeout=60)
     r.raise_for_status()
