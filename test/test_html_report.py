@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import json
+import re
 import sys
 import tempfile
 import unittest
 from datetime import datetime
 from html.parser import HTMLParser
+from html import unescape
 from pathlib import Path
 from unittest.mock import patch
 
@@ -18,6 +21,8 @@ SRC_DIR = PROJECT_ROOT / "src"
 sys.path.insert(0, str(SRC_DIR))
 
 from html_report import (  # noqa: E402
+    _lane_chart,
+    _daily_slice,
     main as html_report_main,
     generate_daily_html_report,
     generate_monthly_html_report,
@@ -86,15 +91,115 @@ class HTMLReportTests(unittest.TestCase):
         self.assertIn("Rövid összefoglaló", html)
         self.assertIn("Közérzet-emlékeztető", html)
         self.assertIn("forecast-row alert", html)
-        self.assertIn("LK hiányzik", html)
+        self.assertIn("Légnyomás-változás", html)
+        self.assertIn("Csapadék", html)
+        self.assertIn("NO₂", html)
+        self.assertIn("Levegőminőség hiányzik", html)
         self.assertIn("alsó becslések", html)
         self.assertIn("abszolút hőterhelést nem méri", html)
         self.assertNotIn("GFZ Potsdam Kp", html)
         self.assertIn("Springfield &lt;test &amp; place&gt;", html)
         self.assertEqual(html.count('<tr class="'), 10)
-        for tier in ("low", "moderate", "high", "very_high", "unknown"):
-            self.assertIn(f"tier-{tier}", html)
+        self.assertIn('class="lane-chart-svg"', html)
+        self.assertNotIn("data-tooltip=", html)
+        self.assertIn("min-width: 600px", html)
+        self.assertIn("height: 362px", html)
+        self.assertIn("@media (min-width: 980px)", html)
         _HTMLSmokeParser().feed(html)
+
+    def test_daily_lane_chart_data_geometry_and_interactions(self):
+        frame = sample_frame()
+        dates = frame.index
+        frame.loc[dates[27:32], "risk_score"] = [0.1, 0.25, 0.35, 0.5, float("nan")]
+        frame["risk_tier"] = frame["risk_score"].map(classify_risk_score)
+        frame.loc[dates[30], "DTR"] = float("nan")
+        frame["latitude"] = 47.123456
+        frame["longitude"] = 19.123456
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output = generate_daily_html_report(
+                frame,
+                temp_dir,
+                location_label="Springfield",
+                generated_at=datetime(2026, 8, 6, 8, 30),
+            )
+            html = output.read_text(encoding="utf-8")
+
+        chart_data = re.search(
+            r'<script type="application/json" class="chart-data">(.*?)</script>',
+            html,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(chart_data)
+        raw_json = chart_data.group(1)
+        self.assertNotIn("</script>", raw_json.lower())
+        records = json.loads(raw_json)
+        self.assertEqual(len(records), 10)
+        self.assertTrue(all(len(record["card_rows"]) == 9 for record in records))
+        self.assertIn("pontszám", records[7]["status_text"])
+        self.assertNotIn('hidden', re.search(r'<aside class="lane-card".*?</aside>', html).group())
+        self.assertNotIn("— µg/m³", html)
+        self.assertNotIn("47.123456", html)
+        self.assertNotIn("19.123456", html)
+
+        selected = re.search(r'data-selected-index="(\d+)"', html)
+        self.assertIsNotNone(selected)
+        self.assertEqual(int(selected.group(1)), 7)
+        self.assertEqual(html.count('class="lane-hit-column"'), 10)
+
+        labels = re.findall(
+            r'<text class="lane-x-label" data-index="(\d+)" x="([\d.]+)" '
+            r'y="368" text-anchor="middle">(.*?)</text>',
+            html,
+        )
+        self.assertEqual([int(index) for index, _, _ in labels], list(range(10)))
+        self.assertEqual(
+            [unescape(label) for _, _, label in labels],
+            [record["short_label"] for record in records],
+        )
+        x_positions = [float(x) for _, x, _ in labels]
+        steps = [right - left for left, right in zip(x_positions, x_positions[1:])]
+        self.assertTrue(all(abs(step - steps[0]) < 0.02 for step in steps))
+
+        for tier in ("low", "moderate", "high", "very_high"):
+            self.assertRegex(
+                html,
+                rf'<circle class="lane-point lane-score-point tier-{tier}(?: [^"]*)?"',
+            )
+        self.assertIn('"tier_key":"unknown"', raw_json)
+        self.assertIn('class="lane-legend-dot tier-unknown"', html)
+        self.assertRegex(html, r'lane-score-point tier-[^"]+ forecast-point')
+        self.assertIn(".lane-point.forecast-point { fill: var(--surface); }", html)
+        self.assertNotRegex(
+            html,
+            r'lane-point[^"]*forecast-point[^"]*fill:\s*var\(--accent\)',
+        )
+
+        dtr_points = re.findall(
+            r'<circle class="[^"]*lane-dtr-point[^"]*" data-lane="DTR" '
+            r'data-index="(\d+)"',
+            html,
+        )
+        self.assertNotIn("3", dtr_points)
+        dtr_segments = re.findall(
+            r'<path class="[^"]*lane-dtr-line[^"]*" data-lane="DTR" '
+            r'data-start-index="(\d+)" data-end-index="(\d+)"',
+            html,
+        )
+        self.assertEqual(len(dtr_segments), 7)
+        self.assertFalse(any("3" in (start, end) for start, end in dtr_segments))
+        self.assertIn("Alsó becslés: PM és NO₂ hiányzik", records[-1]["note"])
+
+        rows, _, _ = _daily_slice(frame.drop(columns=["latitude", "longitude"]))
+        no_today_chart = _lane_chart(rows.tail(3), None)
+        self.assertIn('data-selected-index="2"', no_today_chart)
+        self.assertIn('tabindex="0"', html)
+        self.assertEqual(html.count('tabindex="0"'), 1)
+        self.assertIn('aria-live="polite"', html)
+        self.assertIn('event.key==="ArrowLeft"', html)
+        self.assertIn('event.key==="ArrowRight"', html)
+        self.assertIn('event.key==="Home"', html)
+        self.assertIn('event.key==="End"', html)
 
     def test_monthly_report_excludes_forecast_and_contains_trends(self):
         frame = sample_frame()
@@ -120,9 +225,33 @@ class HTMLReportTests(unittest.TestCase):
         self.assertIn("Napi kockázati pontszám", html)
         self.assertIn("PM₂,₅ 7 napos gördülő átlag", html)
         self.assertIn("DTR 30 napos trend", html)
+        self.assertIn('class="lane-chart-svg"', html)
+        self.assertIn("pointermove", html)
         self.assertIn("Kiemelt események", html)
         self.assertIn("driver-pair", html)
         self.assertIn("Mérsékelt+ napok", html)
+        self.assertEqual(html.count('class="lane-hit-column"'), 30)
+
+        chart_data = re.search(
+            r'<script type="application/json" class="chart-data">(.*?)</script>',
+            html,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(chart_data)
+        records = json.loads(chart_data.group(1))
+        self.assertEqual(len(records), 30)
+        self.assertTrue(all(not record["is_forecast"] for record in records))
+        self.assertTrue(records[-1]["is_today"])
+        self.assertEqual(
+            int(re.search(r'data-selected-index="(\d+)"', html).group(1)),
+            29,
+        )
+        min_width = re.search(
+            r'class="lane-chart-svg"[^>]*style="min-width:(\d+)px"',
+            html,
+        )
+        self.assertIsNotNone(min_width)
+        self.assertGreater(int(min_width.group(1)), 600)
         _HTMLSmokeParser().feed(html)
 
     def test_report_rejects_missing_required_columns(self):

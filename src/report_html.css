@@ -9,10 +9,16 @@
     --very-high-text: #7A1111;
     --unknown-bg: #ECEFF1;
     --unknown-text: #455A64;
+    --tier-low: var(--low-text);
+    --tier-moderate: #A26800;
+    --tier-high: var(--high-text);
+    --tier-very-high: var(--very-high-text);
+    --tier-unknown: var(--unknown-text);
     --accent: #EF9F27;
     --purple: #7F77DD;
     --blue: #378ADD;
     --green: #639922;
+    --dew: #72C3DC;
     --border: #E4E7EB;
     --surface: #FFFFFF;
     --page: #F4F6F8;
@@ -141,10 +147,83 @@ tbody tr.week-start td { border-top: 2px solid var(--border); }
 .spark-bar.tier-very_high { background: #991B1B; }
 .spark-bar.tier-unknown { background: #98A2B3; }
 .threshold-line { position: absolute; right: 0; left: 0; border-top: 1px dashed var(--accent); }
+.lane-chart { margin-top: 18px; }
+.lane-chart-layout { display: grid; gap: 16px; min-width: 0; }
+.lane-chart-main { min-width: 0; }
+.lane-chart-frame { max-width: 100%; overflow-x: auto; }
+.lane-chart-svg { display: block; width: 100%; min-width: 600px; height: auto; }
+.lane-label { fill: var(--text); font: 12px Inter, sans-serif; font-weight: 700; }
+.lane-axis-text, .lane-x-label { fill: var(--muted); font: 12px Inter, sans-serif; }
+.lane-boundary { stroke: var(--border); stroke-width: 1; }
+.lane-zero-line { stroke: var(--purple); stroke-dasharray: 4 3; stroke-width: 1.5; }
+.lane-series-line { fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2; }
+.lane-score-line { stroke: #667085; }
+.lane-pressure-line { stroke: var(--purple); }
+.lane-dtr-line { stroke: var(--accent); }
+.lane-dew-line { stroke: var(--dew); }
+.lane-series-line.forecast-segment { stroke-dasharray: 5 4; }
+.lane-point { cursor: pointer; stroke: var(--surface); stroke-width: 2; }
+.lane-score-point.tier-low { fill: var(--tier-low); }
+.lane-score-point.tier-moderate { fill: var(--tier-moderate); }
+.lane-score-point.tier-high { fill: var(--tier-high); }
+.lane-score-point.tier-very_high { fill: var(--tier-very-high); }
+.lane-score-point.tier-unknown { fill: var(--tier-unknown); }
+.lane-pressure-point { fill: var(--purple); }
+.lane-dtr-point { fill: var(--accent); }
+.lane-dew-point { fill: var(--dew); }
+.lane-point.forecast-point { fill: var(--surface); }
+.lane-score-point.forecast-point.tier-low { stroke: var(--tier-low); }
+.lane-score-point.forecast-point.tier-moderate { stroke: var(--tier-moderate); }
+.lane-score-point.forecast-point.tier-high { stroke: var(--tier-high); }
+.lane-score-point.forecast-point.tier-very_high { stroke: var(--tier-very-high); }
+.lane-score-point.forecast-point.tier-unknown { stroke: var(--tier-unknown); }
+.lane-pressure-point.forecast-point { stroke: var(--purple); }
+.lane-dtr-point.forecast-point { stroke: var(--accent); }
+.lane-dew-point.forecast-point { stroke: var(--dew); }
+.lane-point.is-selected { stroke: var(--text); stroke-width: 3; }
+.lane-selected-line { stroke: #344054; stroke-dasharray: 3 3; stroke-width: 1.5; }
+.lane-hit-column { fill: transparent; cursor: pointer; }
+.lane-legend { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 10px; }
+.lane-legend-item { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11px; }
+.lane-legend-dot { width: 9px; height: 9px; border-radius: 50%; }
+.lane-legend-dot.tier-low { background: var(--tier-low); }
+.lane-legend-dot.tier-moderate { background: var(--tier-moderate); }
+.lane-legend-dot.tier-high { background: var(--tier-high); }
+.lane-legend-dot.tier-very_high { background: var(--tier-very-high); }
+.lane-legend-dot.tier-unknown { background: var(--tier-unknown); }
+.lane-legend-ring { width: 10px; height: 10px; border: 2px solid #667085; border-radius: 50%; background: var(--surface); }
+.lane-card {
+    display: flex;
+    height: 362px;
+    flex-direction: column;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+}
+.lane-card-heading { display: flex; min-height: 22px; align-items: center; justify-content: space-between; gap: 8px; }
+.lane-card-heading strong { font-size: 13px; }
+.lane-card-badge { min-width: 72px; min-height: 16px; color: var(--muted); font-size: 10px; font-weight: 700; text-align: right; }
+.lane-card-badge.badge-today { color: var(--green); }
+.lane-card-badge.badge-forecast { color: #175A91; }
+.lane-card-score { display: flex; min-height: 42px; align-items: center; gap: 10px; margin: 4px 0 7px; }
+.lane-card-score-value { font: 700 24px "JetBrains Mono", Consolas, monospace; }
+.lane-card-rows { display: grid; gap: 2px; margin: 0; }
+.lane-card-row { display: grid; min-height: 22px; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px; }
+.lane-card-row dt { overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.lane-card-row dd { margin: 0; font: 10px "JetBrains Mono", Consolas, monospace; text-align: right; white-space: nowrap; }
+.lane-card-note { display: grid; min-height: 38px; grid-template-columns: auto 1fr; gap: 6px; margin-top: auto; padding-top: 8px; border-top: 1px solid var(--border); font-size: 10px; }
+.lane-card-note strong { color: var(--muted); }
+.lane-card-note span { min-height: 15px; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; clip-path: inset(50%); }
 .event-list { margin: 0; padding-left: 20px; }
 .wellbeing-scale { display: flex; justify-content: space-between; max-width: 500px; margin: 12px 0 4px; }
 .wellbeing-dot { width: 22px; height: 22px; border: 2px solid var(--green); border-radius: 50%; text-align: center; font: 11px/18px "JetBrains Mono", monospace; }
 footer { padding: 16px; color: var(--muted); font-size: 11px; text-align: center; }
+
+@media (min-width: 980px) {
+    .lane-chart-layout { grid-template-columns: minmax(0, 1fr) 260px; align-items: start; }
+}
 
 @media (max-width: 680px) {
     body { padding: 10px; }

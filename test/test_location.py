@@ -68,6 +68,39 @@ class LocationTests(unittest.TestCase):
         with patch("location.requests.get", return_value=MockResponse(payload={})):
             self.assertEqual(search_places("Nowhere"), [])
 
+    def test_hungarian_postcode_search_is_country_filtered_and_localized(self):
+        with patch(
+            "location.requests.get",
+            return_value=MockResponse(payload={"results": []}),
+        ) as get:
+            search_places(" 1054 ")
+
+        self.assertEqual(
+            get.call_args.kwargs["params"],
+            {
+                "name": "1054",
+                "count": 5,
+                "language": "hu",
+                "format": "json",
+                "countryCode": "HU",
+            },
+        )
+
+    def test_unavailable_hungarian_postcode_suggests_city_or_district(self):
+        with patch("location.search_places", return_value=[]):
+            with self.assertRaisesRegex(LocationError, "city or district"):
+                resolve_location(query="1054")
+
+    def test_non_postcode_search_keeps_default_geocoding_language(self):
+        with patch(
+            "location.requests.get",
+            return_value=MockResponse(payload={"results": []}),
+        ) as get:
+            search_places("Budapest")
+
+        self.assertEqual(get.call_args.kwargs["params"]["language"], "en")
+        self.assertNotIn("countryCode", get.call_args.kwargs["params"])
+
     def test_search_places_retries_5xx_and_propagates_4xx(self):
         retry_response = MockResponse(status_code=503)
         success = MockResponse(payload={"results": []})
@@ -124,13 +157,17 @@ class LocationTests(unittest.TestCase):
                 "location.requests.get",
                 return_value=MockResponse(payload=payload),
             ) as get,
-            patch("builtins.input", side_effect=["Springfield", "1", "y"]),
+            patch(
+                "builtins.input",
+                side_effect=["Springfield", "1", "y"],
+            ) as user_input,
             redirect_stdout(StringIO()),
         ):
             location = resolve_location_interactive()
 
         self.assertEqual(location.label, "Springfield, Example State, Exampleland, 12345")
         get.assert_called_once()
+        self.assertEqual(user_input.call_args_list[0].args[0], "Enter a city, district: ")
 
     def test_get_location_noninteractive_without_input(self):
         with patch("config.resolve_location_interactive", side_effect=LocationError(

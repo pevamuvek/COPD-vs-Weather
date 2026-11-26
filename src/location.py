@@ -28,6 +28,10 @@ def round_coords(lat: float, lon: float, decimals: int = 2) -> tuple[float, floa
     return round(float(lat), decimals), round(float(lon), decimals)
 
 
+def _is_hungarian_postcode(query: str) -> bool:
+    return re.fullmatch(r"[0-9]{4}", query.strip()) is not None
+
+
 def _get_geocoding(url: str, params: dict, timeout: int = 15, tries: int = 3):
     last_error = None
     for attempt in range(tries):
@@ -60,9 +64,19 @@ def _get_geocoding(url: str, params: dict, timeout: int = 15, tries: int = 3):
 
 
 def search_places(query: str, count: int = 5, language: str = "en") -> list[dict]:
+    is_hungarian_postcode = _is_hungarian_postcode(query)
+    params = {
+        "name": query.strip() if is_hungarian_postcode else query,
+        "count": count,
+        "language": "hu" if is_hungarian_postcode else language,
+        "format": "json",
+    }
+    if is_hungarian_postcode:
+        params["countryCode"] = "HU"
+
     response = _get_geocoding(
         GEOCODING_URL,
-        {"name": query, "count": count, "language": language, "format": "json"},
+        params,
     )
     data = response.json()
     results = data.get("results")
@@ -150,6 +164,10 @@ def resolve_location(
     except requests.RequestException:
         raise LocationError("Location search failed. Check the connection and try again.") from None
     if not results:
+        if _is_hungarian_postcode(query):
+            raise LocationError(
+                "No Hungarian postcode match was found. Try a city or district name."
+            )
         raise LocationError("No location results found.")
     if choice < 0 or choice >= len(results):
         raise LocationError("The selected location choice is not available.")
@@ -160,14 +178,14 @@ def resolve_location(
 def resolve_location_interactive() -> ResolvedLocation:
     for attempt in range(3):
         try:
-            query = input("Enter a city, district or postcode: ").strip()
+            query = input("Enter a city, district: ").strip()
         except EOFError:
             raise LocationError(
                 "No location was provided in a non-interactive session."
             ) from None
 
         if looks_like_street_address(query):
-            print("Enter a city, district or postcode instead.")
+            print("Enter a city or district instead.")
             continue
 
         try:
@@ -178,7 +196,10 @@ def resolve_location_interactive() -> ResolvedLocation:
             ) from None
 
         if not results:
-            print("No locations found. Try another city, district or postcode.")
+            if _is_hungarian_postcode(query):
+                print("No Hungarian postcode match found. Try a city or district name.")
+            else:
+                print("No locations found. Try another city or district.")
             continue
 
         candidates = results[:5]

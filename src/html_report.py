@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import json
+import math
 import re
 import unicodedata
 from datetime import datetime
@@ -31,6 +33,7 @@ TIER_LABELS_HU = {
     "very_high": "Nagyon magas",
     "unknown": "Ismeretlen",
 }
+SCORE_Y_RANGE = (0.0, 1.0)
 
 
 def _location_code(location_label: str) -> str:
@@ -150,6 +153,11 @@ def _score(value) -> str:
     return _number(value, 3)
 
 
+def _with_unit(value, unit: str, decimals: int = 1, signed: bool = False) -> str:
+    formatted = _number(value, decimals, signed)
+    return formatted if formatted == "—" else f"{formatted} {unit}"
+
+
 def _row_alert(row: pd.Series) -> bool:
     dtr = row.get("DTR")
     delta_p = row.get("delta_P")
@@ -223,6 +231,406 @@ def _flagged_value(value, kind: str) -> str:
     return f"{_number(value, signed=True)} {dot}"
 
 
+def _lane_chart_records(rows: pd.DataFrame, today) -> list[dict]:
+    records = []
+    forecast_mask = _forecast_mask(rows)
+    today = pd.Timestamp(today) if today is not None else None
+    previous_date = None
+
+    for date, row in rows.iterrows():
+        date = pd.Timestamp(date)
+        is_forecast = bool(forecast_mask.loc[date])
+        is_today = today is not None and date == today
+        score = pd.to_numeric(row.get("risk_score"), errors="coerce")
+        score = None if pd.isna(score) else float(score)
+
+        def with_unit(column: str, unit: str, signed: bool = False) -> str:
+            return _with_unit(row.get(column), unit, signed=signed)
+
+        temperature_max = _number(row.get("temperature_2m_max"))
+        temperature_min = _number(row.get("temperature_2m_min"))
+        temperature_pair = (
+            "—"
+            if temperature_max == "—" and temperature_min == "—"
+            else f"{temperature_max} / {temperature_min} °C"
+        )
+        card_rows = [
+            ["Hőmérséklet max./min.", temperature_pair],
+            ["DTR", with_unit("DTR", "°C")],
+            ["Légnyomás-változás", with_unit("delta_P", "hPa", signed=True)],
+            ["Harmatpont", with_unit("dew_point_2m_mean", "°C")],
+            ["Csapadék", with_unit("precipitation_sum", "mm")],
+            ["Max. szélsebesség", with_unit("windspeed_10m_max", "km/h")],
+            ["PM₂,₅", with_unit("pm2_5", "µg/m³")],
+            ["PM₁₀", with_unit("pm10", "µg/m³")],
+            ["NO₂", with_unit("no2", "µg/m³")],
+        ]
+        note = (
+            "Alsó becslés: PM és NO₂ hiányzik"
+            if is_forecast
+            else ""
+        )
+        has_new_month = (
+            previous_date is None
+            or date.month != previous_date.month
+            or date.year != previous_date.year
+        )
+        short_label = (
+            f"{MONTHS_HU[date.month]} {date.day}."
+            if has_new_month
+            else f"{date.day}."
+        )
+        tier = _tier(row)
+        badge_text = "Ma" if is_today else "Előrejelzés" if is_forecast else ""
+        badge_class = (
+            "lane-card-badge badge-today"
+            if is_today
+            else "lane-card-badge badge-forecast"
+            if is_forecast
+            else "lane-card-badge"
+        )
+        status_parts = [short_label]
+        if is_today:
+            status_parts.append("ma")
+        elif is_forecast:
+            status_parts.append("előrejelzés")
+        status_parts.extend((f"pontszám {_score(score)}", TIER_LABELS_HU[tier].lower()))
+        records.append(
+            {
+                "date_label": _hu_date(date, include_year=True),
+                "short_label": short_label,
+                "score_text": _score(score),
+                "score": score,
+                "tier_key": tier,
+                "tier_label": TIER_LABELS_HU[tier],
+                "badge_text": badge_text,
+                "badge_class": badge_class,
+                "status_text": ", ".join(status_parts),
+                "is_forecast": is_forecast,
+                "is_today": is_today,
+                "card_rows": card_rows,
+                "note": note,
+            }
+        )
+        previous_date = date
+
+    return records
+
+
+def _lane_scale(
+    rows: pd.DataFrame,
+    column: str,
+    fixed_range: tuple[float, float] | None = None,
+    include_zero: bool = False,
+) -> tuple[float | None, float | None, str, str]:
+    if fixed_range is not None:
+        low, high = fixed_range
+        return low, high, _number(low, 2), _number(high, 2)
+
+    values = rows[column] if column in rows else pd.Series(index=rows.index, dtype=float)
+    values = pd.to_numeric(values, errors="coerce").dropna()
+    if values.empty:
+        return None, None, "—", "—"
+
+    actual_low, actual_high = float(values.min()), float(values.max())
+    low, high = actual_low, actual_high
+    if include_zero:
+        low, high = min(low, 0.0), max(high, 0.0)
+    elif low == high:
+        padding = max(abs(low) * 0.1, 0.5)
+        low, high = low - padding, high + padding
+
+    tick_low, tick_high = low, high
+    if actual_low == actual_high and not include_zero:
+        tick_low = tick_high = actual_low
+    return low, high, _number(tick_low), _number(tick_high)
+
+
+def _lane_chart(rows: pd.DataFrame, today) -> str:
+    records = _lane_chart_records(rows, today)
+    day_count = len(records)
+    default_index = day_count - 1
+    for index, record in enumerate(records):
+        if record["is_today"]:
+            default_index = index
+            break
+
+    render_scale = 600 / 640
+    day_step_units = 32
+    if day_count > 10:
+        longest_label = max(len(record["short_label"]) for record in records)
+        day_step_units = max(
+            day_step_units,
+            math.ceil(longest_label * 6.5 / render_scale),
+        )
+    view_width = max(640, 130 + day_count * day_step_units)
+    view_height = 386
+    render_width = round(view_width * render_scale)
+    render_height = round(view_height * render_scale)
+    plot_left, plot_right = 118, view_width - 12
+    plot_width = plot_right - plot_left
+    day_step = plot_width / day_count
+    x_positions = [plot_left + day_step * (index + 0.5) for index in range(day_count)]
+    lanes = [
+        ("risk_score", "score", "Pontszám", 16, 108, SCORE_Y_RANGE, False),
+        ("delta_P", "pressure", "ΔP (hPa)", 122, 180, None, True),
+        ("DTR", "dtr", "DTR (°C)", 198, 256, None, False),
+        ("dew_point_2m_mean", "dew", "Harmatpont (°C)", 274, 332, None, False),
+    ]
+
+    lane_markup = []
+    points = []
+    hit_columns = []
+    for column, lane_id, label, top, bottom, fixed_range, include_zero in lanes:
+        low, high, tick_low, tick_high = _lane_scale(
+            rows, column, fixed_range=fixed_range, include_zero=include_zero
+        )
+        center_y = (top + bottom) / 2
+        lane_markup.append(
+            f'<text class="lane-label" x="8" y="{center_y + 4:.1f}">'
+            f"{escape(label)}</text>"
+            f'<text class="lane-axis-text" x="{plot_left - 8}" y="{top + 4}" '
+            f'text-anchor="end">{escape(tick_high)}</text>'
+            f'<text class="lane-axis-text" x="{plot_left - 8}" y="{bottom + 4}" '
+            f'text-anchor="end">{escape(tick_low)}</text>'
+            f'<line class="lane-boundary" x1="{plot_left}" y1="{top}" '
+            f'x2="{plot_right}" y2="{top}"></line>'
+            f'<line class="lane-boundary" x1="{plot_left}" y1="{bottom}" '
+            f'x2="{plot_right}" y2="{bottom}"></line>'
+        )
+
+        if column == "delta_P" and low is not None and high is not None and low <= 0 <= high:
+            zero_y = bottom - (0 - low) / (high - low) * (bottom - top)
+            lane_markup.append(
+                f'<line class="lane-zero-line" x1="{plot_left}" y1="{zero_y:.2f}" '
+                f'x2="{plot_right}" y2="{zero_y:.2f}"></line>'
+            )
+
+        values = []
+        for index, (date, row) in enumerate(rows.iterrows()):
+            value = pd.to_numeric(row.get(column), errors="coerce")
+            if low is None or high is None or pd.isna(value):
+                values.append(None)
+                continue
+            if high == low:
+                y = (top + bottom) / 2
+            else:
+                y = bottom - (float(value) - low) / (high - low) * (bottom - top)
+            values.append(
+                {
+                    "index": index,
+                    "x": x_positions[index],
+                    "y": y,
+                    "is_forecast": records[index]["is_forecast"],
+                    "tier_key": records[index]["tier_key"],
+                }
+            )
+
+        for previous, current in zip(values, values[1:]):
+            if previous is None or current is None:
+                continue
+            forecast_segment = previous["is_forecast"] or current["is_forecast"]
+            line_classes = f"lane-series-line lane-{lane_id}-line"
+            if forecast_segment:
+                line_classes += " forecast-segment"
+            lane_markup.append(
+                f'<path class="{line_classes}" data-lane="{column}" '
+                f'data-start-index="{previous["index"]}" '
+                f'data-end-index="{current["index"]}" '
+                f'd="M{previous["x"]:.2f},{previous["y"]:.2f} '
+                f'L{current["x"]:.2f},{current["y"]:.2f}"></path>'
+            )
+
+        for point in values:
+            if point is None:
+                continue
+            selected = point["index"] == default_index
+            if lane_id == "score":
+                point_classes = (
+                    f'lane-point lane-score-point tier-{point["tier_key"]}'
+                )
+                radius = 8 if selected else 5
+            else:
+                point_classes = f"lane-point lane-{lane_id}-point"
+                radius = 6 if selected else 4
+            if point["is_forecast"]:
+                point_classes += " forecast-point"
+            if selected:
+                point_classes += " is-selected"
+            points.append(
+                f'<circle class="{point_classes}" data-lane="{column}" '
+                f'data-index="{point["index"]}" cx="{point["x"]:.2f}" '
+                f'cy="{point["y"]:.2f}" r="{radius}"></circle>'
+            )
+
+    x_labels = []
+    for index, (record, x) in enumerate(zip(records, x_positions)):
+        x_labels.append(
+            f'<text class="lane-x-label" data-index="{index}" x="{x:.2f}" '
+            f'y="368" text-anchor="middle">{escape(record["short_label"])}</text>'
+        )
+
+    selected_x = x_positions[default_index]
+    selection_line = (
+        f'<line class="lane-selected-line" x1="{selected_x:.2f}" '
+        f'x2="{selected_x:.2f}" y1="8" y2="340"></line>'
+    )
+    for index, x in enumerate(x_positions):
+        hit_columns.append(
+            f'<rect class="lane-hit-column" data-index="{index}" '
+            f'data-center="{x:.2f}" x="{plot_left + index * day_step:.2f}" '
+            f'y="8" width="{day_step:.2f}" height="332"></rect>'
+        )
+
+    tier_legend = "".join(
+        f'<span class="lane-legend-item"><span class="lane-legend-dot tier-{tier}">'
+        f"</span>{escape(label)}</span>"
+        for tier, label in TIER_LABELS_HU.items()
+    )
+    legend = (
+        '<div class="lane-legend">'
+        + tier_legend
+        + '<span class="lane-legend-item"><span class="lane-legend-ring"></span>'
+        "üres karika = előrejelzés</span></div>"
+    )
+
+    selected = records[default_index]
+    card_rows = "".join(
+        f'<div class="lane-card-row"><dt>{escape(label)}</dt>'
+        f'<dd class="lane-card-value">{escape(value)}</dd></div>'
+        for label, value in selected["card_rows"]
+    )
+    card = (
+        '<aside class="lane-card" aria-label="Kiválasztott nap adatai">'
+        '<div class="lane-card-heading">'
+        f'<strong data-card-date>{escape(selected["date_label"])}</strong>'
+        f'<span class="{selected["badge_class"]}" data-card-badge>'
+        f'{escape(selected["badge_text"])}</span>'
+        "</div>"
+        '<div class="lane-card-score">'
+        f'<span class="lane-card-score-value" data-card-score>'
+        f'{escape(selected["score_text"])}</span>'
+        f'<span class="tier-pill tier-{selected["tier_key"]}" '
+        f'data-card-tier>{escape(selected["tier_label"])}</span>'
+        "</div>"
+        f'<dl class="lane-card-rows">{card_rows}</dl>'
+        '<div class="lane-card-note"><strong>Megjegyzés</strong>'
+        f'<span data-card-note>{escape(selected["note"])}</span></div>'
+        "</aside>"
+    )
+    json_data = json.dumps(records, ensure_ascii=False, separators=(",", ":"))
+    json_data = json_data.replace("</", "<\\/")
+    return (
+        '<div class="lane-chart">'
+        '<div class="lane-chart-layout"><div class="lane-chart-main">'
+        '<div class="lane-chart-frame">'
+        f'<svg class="lane-chart-svg" width="{render_width}" height="{render_height}" '
+        f'style="min-width:{render_width}px" '
+        f'viewBox="0 0 {view_width} {view_height}" tabindex="0" role="application" '
+        'aria-label="Napi kockázati és időjárási adatok" '
+        'aria-describedby="lane-chart-status" '
+        f'data-selected-index="{default_index}">'
+        + "".join(lane_markup)
+        + selection_line
+        + "".join(points)
+        + "".join(x_labels)
+        + "".join(hit_columns)
+        + "</svg></div>"
+        + legend
+        + "</div>"
+        + card
+        + '</div><div class="visually-hidden" id="lane-chart-status" '
+        'aria-live="polite"></div>'
+        f'<script type="application/json" class="chart-data">{json_data}</script>'
+        "<script>"
+        "(function(){"
+        'var root=document.currentScript.parentElement;'
+        'var data=JSON.parse(root.querySelector(".chart-data").textContent);'
+        'var svg=root.querySelector(".lane-chart-svg");'
+        'var frame=root.querySelector(".lane-chart-frame");'
+        'var columns=Array.from(svg.querySelectorAll(".lane-hit-column"));'
+        'var selectionLine=svg.querySelector(".lane-selected-line");'
+        'var cardDate=root.querySelector("[data-card-date]");'
+        'var cardBadge=root.querySelector("[data-card-badge]");'
+        'var cardScore=root.querySelector("[data-card-score]");'
+        'var cardTier=root.querySelector("[data-card-tier]");'
+        'var cardValues=Array.from(root.querySelectorAll(".lane-card-value"));'
+        'var cardNote=root.querySelector("[data-card-note]");'
+        'var status=root.querySelector("#lane-chart-status");'
+        'var pinnedIndex=Number(svg.getAttribute("data-selected-index"));'
+        'var activeIndex=pinnedIndex;'
+        "function render(index, announce){"
+        "var day=data[index];"
+        "activeIndex=index;"
+        'svg.setAttribute("data-selected-index",String(index));'
+        'selectionLine.setAttribute("x1",columns[index].getAttribute("data-center"));'
+        'selectionLine.setAttribute("x2",columns[index].getAttribute("data-center"));'
+        'cardDate.textContent=day.date_label;'
+        "cardBadge.textContent=day.badge_text;"
+        "cardBadge.className=day.badge_class;"
+        'cardScore.textContent=day.score_text;'
+        'cardTier.textContent=day.tier_label;'
+        'cardTier.className="tier-pill tier-"+day.tier_key;'
+        "day.card_rows.forEach(function(row,index){"
+        "cardValues[index].textContent=row[1];"
+        "});"
+        'cardNote.textContent=day.note;'
+        'svg.querySelectorAll(".lane-point").forEach(function(point){'
+        'var selected=Number(point.getAttribute("data-index"))===index;'
+        'point.classList.toggle("is-selected",selected);'
+        'if(point.classList.contains("lane-score-point"))'
+        'point.setAttribute("r",selected?"8":"5");'
+        'else point.setAttribute("r",selected?"6":"4");'
+        "});"
+        "if(announce){"
+        "status.textContent=day.status_text;"
+        "}"
+        "}"
+        "function keepColumnVisible(index){"
+        "var rect=columns[index].getBoundingClientRect();"
+        "var bounds=frame.getBoundingClientRect();"
+        "if(rect.left<bounds.left)frame.scrollLeft-=bounds.left-rect.left;"
+        "else if(rect.right>bounds.right)frame.scrollLeft+=rect.right-bounds.right;"
+        "}"
+        "function choose(index,pin){"
+        "index=Math.max(0,Math.min(data.length-1,index));"
+        "if(pin)pinnedIndex=index;"
+        "render(index,true);"
+        "keepColumnVisible(index);"
+        "}"
+        'svg.addEventListener("pointermove",function(event){'
+        'if(event.pointerType!=="mouse")return;'
+        'var hit=event.target.closest(".lane-hit-column");'
+        'if(hit)choose(Number(hit.getAttribute("data-index")),false);'
+        "});"
+        'svg.addEventListener("pointerleave",function(event){'
+        'if(event.pointerType==="mouse")render(pinnedIndex,true);'
+        "});"
+        'svg.addEventListener("click",function(event){'
+        'var hit=event.target.closest(".lane-hit-column");'
+        'if(hit)choose(Number(hit.getAttribute("data-index")),true);'
+        "});"
+        'svg.addEventListener("pointerdown",function(event){'
+        'if(event.pointerType!=="touch")return;'
+        'var hit=event.target.closest(".lane-hit-column");'
+        'if(hit)choose(Number(hit.getAttribute("data-index")),true);'
+        "});"
+        'svg.addEventListener("keydown",function(event){'
+        "var next=pinnedIndex;"
+        'if(event.key==="ArrowLeft")next-=1;'
+        'else if(event.key==="ArrowRight")next+=1;'
+        'else if(event.key==="Home")next=0;'
+        'else if(event.key==="End")next=data.length-1;'
+        "else return;"
+        "event.preventDefault();"
+        "choose(next,true);"
+        "});"
+        "render(pinnedIndex,true);"
+        "})();"
+        "</script></div>"
+    )
+
+
 def _table(rows: pd.DataFrame, today=None, monthly: bool = False) -> str:
     body = []
     previous_week = None
@@ -258,7 +666,7 @@ def _table(rows: pd.DataFrame, today=None, monthly: bool = False) -> str:
         notes = []
         aq_columns = [name for name in ("pm2_5", "pm10", "no2") if name in rows.columns]
         if is_forecast and aq_columns and any(pd.isna(row.get(name)) for name in aq_columns):
-            notes.append("LK hiányzik")
+            notes.append("Levegőminőség hiányzik")
         if pd.notna(row.get("temperature_2m_max")) and row.get("temperature_2m_max") > 38:
             notes.append("Hőség")
         if today is not None and date == today:
@@ -484,6 +892,9 @@ def generate_daily_html_report(
         + _daily_info(rows, today, forecast)
         + _daily_cards(rows, today, forecast)
         + "</section>"
+        '<section class="panel"><h2>Napi kockázati trend</h2>'
+        + _lane_chart(rows, today)
+        + "</section>"
         '<section class="panel"><h2>Részletes napi adatok</h2>'
         + _table(rows, today=today)
         + "</section>"
@@ -619,6 +1030,7 @@ def generate_monthly_html_report(
     """Generate a 30-historical-day overview HTML report."""
     frame = _prepare_frame(df)
     rows = _monthly_slice(frame)
+    today = rows.index[-1]
     generated_at = generated_at or datetime.now()
     report_city = report_city or location_label
     tiers = rows.apply(_tier, axis=1)
@@ -643,6 +1055,7 @@ def generate_monthly_html_report(
         + "</section>"
         '<section class="panel"><h2>Trendek</h2>'
         + spark_section
+        + _lane_chart(rows, today)
         + "</section>"
         '<section class="panel"><h2>Kiemelt események</h2>'
         + _monthly_events(rows)

@@ -38,10 +38,13 @@ The daily version selects the last eight non-forecast rows (the previous seven
 days plus today) and up to two subsequent forecast rows. It contains:
 
 1. risk outlook and four metric cards;
-2. a detailed table with DTR and pressure flags;
-3. risk-score-consistent driver contribution bars;
-4. a short Hungarian narrative and forecast-data caveat;
-5. extreme-heat, wellbeing, and clinical-disclaimer notes.
+2. an interactive four-lane daily chart for risk score, pressure change, DTR,
+   and dew point, with tier-coloured score points and a selectable daily
+   metrics card;
+3. a detailed table with DTR and pressure flags;
+4. risk-score-consistent driver contribution bars;
+5. a short Hungarian narrative and forecast-data caveat;
+6. extreme-heat, wellbeing, and clinical-disclaimer notes.
 
 Forecast rows are highlighted when their tier is `moderate`, `high`, or
 `very_high`, when DTR is at least 13 °C, or when absolute pressure change is at
@@ -51,8 +54,11 @@ least 3 hPa.
 
 The monthly version selects the last 30 non-forecast rows. It contains summary
 cards, ISO-week aggregation, a full detail table, CSS-only risk/PM/DTR trends,
-automatically detected notable events, average/peak driver bars, and a wellbeing
-comparison prompt.
+an interactive four-lane chart and selectable daily metrics card, automatically
+detected notable events, average/peak driver bars, and a wellbeing comparison
+prompt. The chart uses the same risk-score, pressure-change, DTR, and dew-point
+lanes as the daily report, with horizontal scrolling to keep labels and
+selection targets legible across all 30 days.
 
 ## Tier display
 

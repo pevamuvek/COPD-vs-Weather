@@ -134,6 +134,12 @@ It does not accept or infer street addresses. Resolved coordinates are rounded
 to two decimal places before use or logging. Reports show only the chosen place
 label, never coordinates.
 
+Four-digit postcode searches are filtered to Hungary and request Hungarian
+place names; other location searches keep the general geocoding behavior.
+Open-Meteo currently returns no matches for tested Hungarian postcodes, so if a
+postcode has no result, use its city or district name instead. The country
+filter prevents a matching postcode from resolving to an unrelated country.
+
 For private local use, coordinates and timezone may be set with
 `COPD_LAT`, `COPD_LON`, and `COPD_TZ` environment variables. Keep those values
 out of the repository.
