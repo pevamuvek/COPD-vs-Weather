@@ -38,11 +38,12 @@ The daily version selects the last eight non-forecast rows (the previous seven
 days plus today) and up to two subsequent forecast rows. It contains:
 
 1. risk outlook and four metric cards;
-2. an interactive four-lane daily chart for risk score, pressure change, DTR,
-   and dew point, with tier-coloured score points and a selectable daily
-   metrics card;
+2. an interactive chart for risk score, maximum/minimum temperature, DTR,
+   pressure change, dew point, precipitation, maximum wind speed, and a shared
+   pollutant lane with PM₂,₅, PM₁₀, and NO₂ lines, with tier-coloured score
+   points and a selectable daily metrics card;
 3. a detailed table with DTR and pressure flags;
-4. risk-score-consistent driver contribution bars;
+4. risk-score contribution bars showing each driver's average and period peak;
 5. a short Hungarian narrative and forecast-data caveat;
 6. extreme-heat, wellbeing, and clinical-disclaimer notes.
 
@@ -54,11 +55,34 @@ least 3 hPa.
 
 The monthly version selects the last 30 non-forecast rows. It contains summary
 cards, ISO-week aggregation, a full detail table, CSS-only risk/PM/DTR trends,
-an interactive four-lane chart and selectable daily metrics card, automatically
+an interactive metric chart and selectable daily metrics card, automatically
 detected notable events, average/peak driver bars, and a wellbeing comparison
-prompt. The chart uses the same risk-score, pressure-change, DTR, and dew-point
-lanes as the daily report, with horizontal scrolling to keep labels and
-selection targets legible across all 30 days.
+prompt. The chart uses the same metric lanes as the daily report.
+
+Both chart views use compact, evenly spaced daily targets (about 36 px per day
+in the 10-day report and 32 px per day in the 30-day report), with at least
+28 px per selectable day. Month-transition labels use separate month and day
+lines. When a chart does not fit its container, horizontal scrolling stays
+inside the chart frame rather than expanding the page.
+
+The chart lanes follow this order: risk score, maximum/minimum temperature,
+DTR, pressure change, dew point, precipitation, maximum wind speed, and the
+shared pollutant lane. The selected-day card keeps PM₂,₅, PM₁₀, and NO₂ as
+separate rows in the canonical metric order. The temperature lane shows
+maximum and minimum as separate series. Each lane has its own scale; the three
+pollutant lines share a concentration scale. Missing observations leave gaps
+rather than interpolated values. The maximum-temperature line is red. The
+temperature max/min and PM₂,₅/PM₁₀ lines use 70% of the standard line width;
+PM₂,₅/PM₁₀ point markers are half-sized.
+
+The risk-driver bars use the same fixed 0–1 scale as the risk score: a full
+bar is 1.000 score points, so width is directly proportional to the displayed
+contribution value. Each factor shows its base score weight; the effective
+weight is renormalized per day when inputs are missing. The average is
+calculated over days when that feature is available. The date at the end of
+the row marks the first day with that factor's maximum contribution. In both
+reports, the faded bar shows that peak. The driver chart displays four of the
+score's six inputs, so its bars are not percentages that sum to the whole score.
 
 ## Tier display
 

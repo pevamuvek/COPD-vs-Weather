@@ -97,6 +97,19 @@ def compute_row_score(row, feature_weights, feature_ranges):
     return weighted_sum / total_weight
 ```
 
+`compute_feature_contributions` returns each available feature's addend to
+that same score:
+
+`contribution_i = normalized_i × weight_i / sum(available weights)`
+
+The contributions across all available features sum to the row's risk score.
+They are score points, not percentages of the score; partial rows use the
+renormalized available weights.
+
+The report's displayed factor weight is the base `RISK_WEIGHTS` coefficient;
+the effective daily coefficient is that base weight divided by the sum of
+weights for features available on that date.
+
 ### Risk tier mapping
 
 | Score | Tier | Label |

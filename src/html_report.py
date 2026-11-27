@@ -34,6 +34,92 @@ TIER_LABELS_HU = {
     "unknown": "Ismeretlen",
 }
 SCORE_Y_RANGE = (0.0, 1.0)
+LANE_MIN_DAY_STEP_PX = 28
+LANE_DAILY_DAY_STEP_PX = 36
+LANE_MONTHLY_DAY_STEP_PX = 31.5
+METRIC_ORDER = (
+    "risk_score",
+    "temperature",
+    "DTR",
+    "delta_P",
+    "dew_point_2m_mean",
+    "precipitation_sum",
+    "windspeed_10m_max",
+    "pm2_5",
+    "pm10",
+    "no2",
+)
+LANE_ORDER = (
+    "risk_score",
+    "temperature",
+    "DTR",
+    "delta_P",
+    "dew_point_2m_mean",
+    "precipitation_sum",
+    "windspeed_10m_max",
+    "air_quality",
+)
+CARD_METRIC_LABELS = {
+    "temperature": "Hőmérséklet max./min.",
+    "DTR": "DTR",
+    "delta_P": "Légnyomás-változás",
+    "dew_point_2m_mean": "Harmatpont",
+    "precipitation_sum": "Csapadék",
+    "windspeed_10m_max": "Max. szélsebesség",
+    "pm2_5": "PM₂,₅",
+    "pm10": "PM₁₀",
+    "no2": "NO₂",
+}
+LANE_DEFINITIONS = {
+    "risk_score": {
+        "label": "Pontszám",
+        "series": (("risk_score", "score"),),
+        "fixed_range": SCORE_Y_RANGE,
+        "include_zero": False,
+    },
+    "temperature": {
+        "label": "Hőm. max/min (°C)",
+        "series": (
+            ("temperature_2m_max", "temperature-max"),
+            ("temperature_2m_min", "temperature-min"),
+        ),
+        "include_zero": False,
+    },
+    "DTR": {
+        "label": "DTR (°C)",
+        "series": (("DTR", "dtr"),),
+        "include_zero": False,
+    },
+    "delta_P": {
+        "label": "ΔP (hPa)",
+        "series": (("delta_P", "pressure"),),
+        "include_zero": True,
+    },
+    "dew_point_2m_mean": {
+        "label": "Harmatpont (°C)",
+        "series": (("dew_point_2m_mean", "dew"),),
+        "include_zero": False,
+    },
+    "precipitation_sum": {
+        "label": "Csapadék (mm)",
+        "series": (("precipitation_sum", "precipitation"),),
+        "include_zero": True,
+    },
+    "windspeed_10m_max": {
+        "label": "Max. szél (km/h)",
+        "series": (("windspeed_10m_max", "wind"),),
+        "include_zero": True,
+    },
+    "air_quality": {
+        "label": "Légszennyezők (µg/m³)",
+        "series": (
+            ("pm2_5", "pm25"),
+            ("pm10", "pm10"),
+            ("no2", "no2"),
+        ),
+        "include_zero": True,
+    },
+}
 
 
 def _location_code(location_label: str) -> str:
@@ -254,16 +340,21 @@ def _lane_chart_records(rows: pd.DataFrame, today) -> list[dict]:
             if temperature_max == "—" and temperature_min == "—"
             else f"{temperature_max} / {temperature_min} °C"
         )
+        card_values = {
+            "temperature": temperature_pair,
+            "DTR": with_unit("DTR", "°C"),
+            "delta_P": with_unit("delta_P", "hPa", signed=True),
+            "dew_point_2m_mean": with_unit("dew_point_2m_mean", "°C"),
+            "precipitation_sum": with_unit("precipitation_sum", "mm"),
+            "windspeed_10m_max": with_unit("windspeed_10m_max", "km/h"),
+            "pm2_5": with_unit("pm2_5", "µg/m³"),
+            "pm10": with_unit("pm10", "µg/m³"),
+            "no2": with_unit("no2", "µg/m³"),
+        }
         card_rows = [
-            ["Hőmérséklet max./min.", temperature_pair],
-            ["DTR", with_unit("DTR", "°C")],
-            ["Légnyomás-változás", with_unit("delta_P", "hPa", signed=True)],
-            ["Harmatpont", with_unit("dew_point_2m_mean", "°C")],
-            ["Csapadék", with_unit("precipitation_sum", "mm")],
-            ["Max. szélsebesség", with_unit("windspeed_10m_max", "km/h")],
-            ["PM₂,₅", with_unit("pm2_5", "µg/m³")],
-            ["PM₁₀", with_unit("pm10", "µg/m³")],
-            ["NO₂", with_unit("no2", "µg/m³")],
+            [CARD_METRIC_LABELS[key], card_values[key]]
+            for key in METRIC_ORDER
+            if key in CARD_METRIC_LABELS
         ]
         note = (
             "Alsó becslés: PM és NO₂ hiányzik"
@@ -275,10 +366,10 @@ def _lane_chart_records(rows: pd.DataFrame, today) -> list[dict]:
             or date.month != previous_date.month
             or date.year != previous_date.year
         )
+        month_label = MONTHS_HU[date.month] if has_new_month else None
+        day_label = f"{date.day}."
         short_label = (
-            f"{MONTHS_HU[date.month]} {date.day}."
-            if has_new_month
-            else f"{date.day}."
+            f"{month_label} {day_label}" if month_label else day_label
         )
         tier = _tier(row)
         badge_text = "Ma" if is_today else "Előrejelzés" if is_forecast else ""
@@ -299,6 +390,8 @@ def _lane_chart_records(rows: pd.DataFrame, today) -> list[dict]:
             {
                 "date_label": _hu_date(date, include_year=True),
                 "short_label": short_label,
+                "month_label": month_label,
+                "day_label": day_label,
                 "score_text": _score(score),
                 "score": score,
                 "tier_key": tier,
@@ -319,7 +412,7 @@ def _lane_chart_records(rows: pd.DataFrame, today) -> list[dict]:
 
 def _lane_scale(
     rows: pd.DataFrame,
-    column: str,
+    columns: str | Iterable[str],
     fixed_range: tuple[float, float] | None = None,
     include_zero: bool = False,
 ) -> tuple[float | None, float | None, str, str]:
@@ -327,8 +420,18 @@ def _lane_scale(
         low, high = fixed_range
         return low, high, _number(low, 2), _number(high, 2)
 
-    values = rows[column] if column in rows else pd.Series(index=rows.index, dtype=float)
-    values = pd.to_numeric(values, errors="coerce").dropna()
+    if isinstance(columns, str):
+        columns = (columns,)
+    values_by_column = [
+        pd.to_numeric(rows[column], errors="coerce")
+        for column in columns
+        if column in rows
+    ]
+    values = (
+        pd.concat(values_by_column, ignore_index=True)
+        if values_by_column
+        else pd.Series(dtype=float)
+    ).dropna()
     if values.empty:
         return None, None, "—", "—"
 
@@ -356,38 +459,50 @@ def _lane_chart(rows: pd.DataFrame, today) -> str:
             break
 
     render_scale = 600 / 640
-    day_step_units = 32
-    if day_count > 10:
-        longest_label = max(len(record["short_label"]) for record in records)
-        day_step_units = max(
-            day_step_units,
-            math.ceil(longest_label * 6.5 / render_scale),
-        )
-    view_width = max(640, 130 + day_count * day_step_units)
-    view_height = 386
+    target_day_step = (
+        LANE_MONTHLY_DAY_STEP_PX if day_count > 10 else LANE_DAILY_DAY_STEP_PX
+    )
+    day_step_units = math.ceil(
+        max(LANE_MIN_DAY_STEP_PX, target_day_step) / render_scale
+    )
+    plot_left, plot_right_margin = 150, 12
+    lanes = []
+    lane_top = 16
+    for metric_key in LANE_ORDER:
+        lane = LANE_DEFINITIONS[metric_key]
+        lane_height = 60 if metric_key == "risk_score" else 46
+        lanes.append((metric_key, lane, lane_top, lane_top + lane_height))
+        lane_top += lane_height + 10
+
+    plot_bottom = lanes[-1][3]
+    month_label_y = plot_bottom + 24
+    day_label_y = plot_bottom + 42
+    view_width = plot_left + day_count * day_step_units + plot_right_margin
+    view_height = day_label_y + 18
     render_width = round(view_width * render_scale)
     render_height = round(view_height * render_scale)
-    plot_left, plot_right = 118, view_width - 12
+    plot_right = view_width - plot_right_margin
     plot_width = plot_right - plot_left
     day_step = plot_width / day_count
     x_positions = [plot_left + day_step * (index + 0.5) for index in range(day_count)]
-    lanes = [
-        ("risk_score", "score", "Pontszám", 16, 108, SCORE_Y_RANGE, False),
-        ("delta_P", "pressure", "ΔP (hPa)", 122, 180, None, True),
-        ("DTR", "dtr", "DTR (°C)", 198, 256, None, False),
-        ("dew_point_2m_mean", "dew", "Harmatpont (°C)", 274, 332, None, False),
-    ]
 
     lane_markup = []
     points = []
     hit_columns = []
-    for column, lane_id, label, top, bottom, fixed_range, include_zero in lanes:
+    for metric_key, lane, top, bottom in lanes:
+        label = lane["label"]
+        series = lane["series"]
+        columns = tuple(column for column, _ in series)
         low, high, tick_low, tick_high = _lane_scale(
-            rows, column, fixed_range=fixed_range, include_zero=include_zero
+            rows,
+            columns,
+            fixed_range=lane.get("fixed_range"),
+            include_zero=lane["include_zero"],
         )
         center_y = (top + bottom) / 2
         lane_markup.append(
-            f'<text class="lane-label" x="8" y="{center_y + 4:.1f}">'
+            f'<text class="lane-label" data-metric="{metric_key}" '
+            f'x="8" y="{center_y + 4:.1f}">'
             f"{escape(label)}</text>"
             f'<text class="lane-axis-text" x="{plot_left - 8}" y="{top + 4}" '
             f'text-anchor="end">{escape(tick_high)}</text>'
@@ -399,87 +514,103 @@ def _lane_chart(rows: pd.DataFrame, today) -> str:
             f'x2="{plot_right}" y2="{bottom}"></line>'
         )
 
-        if column == "delta_P" and low is not None and high is not None and low <= 0 <= high:
+        if (
+            metric_key == "delta_P"
+            and low is not None
+            and high is not None
+            and low <= 0 <= high
+        ):
             zero_y = bottom - (0 - low) / (high - low) * (bottom - top)
             lane_markup.append(
                 f'<line class="lane-zero-line" x1="{plot_left}" y1="{zero_y:.2f}" '
                 f'x2="{plot_right}" y2="{zero_y:.2f}"></line>'
             )
 
-        values = []
-        for index, (date, row) in enumerate(rows.iterrows()):
-            value = pd.to_numeric(row.get(column), errors="coerce")
-            if low is None or high is None or pd.isna(value):
-                values.append(None)
-                continue
-            if high == low:
-                y = (top + bottom) / 2
-            else:
-                y = bottom - (float(value) - low) / (high - low) * (bottom - top)
-            values.append(
-                {
-                    "index": index,
-                    "x": x_positions[index],
-                    "y": y,
-                    "is_forecast": records[index]["is_forecast"],
-                    "tier_key": records[index]["tier_key"],
-                }
-            )
-
-        for previous, current in zip(values, values[1:]):
-            if previous is None or current is None:
-                continue
-            forecast_segment = previous["is_forecast"] or current["is_forecast"]
-            line_classes = f"lane-series-line lane-{lane_id}-line"
-            if forecast_segment:
-                line_classes += " forecast-segment"
-            lane_markup.append(
-                f'<path class="{line_classes}" data-lane="{column}" '
-                f'data-start-index="{previous["index"]}" '
-                f'data-end-index="{current["index"]}" '
-                f'd="M{previous["x"]:.2f},{previous["y"]:.2f} '
-                f'L{current["x"]:.2f},{current["y"]:.2f}"></path>'
-            )
-
-        for point in values:
-            if point is None:
-                continue
-            selected = point["index"] == default_index
-            if lane_id == "score":
-                point_classes = (
-                    f'lane-point lane-score-point tier-{point["tier_key"]}'
+        for column, series_id in series:
+            values = []
+            for index, (_, row) in enumerate(rows.iterrows()):
+                value = pd.to_numeric(row.get(column), errors="coerce")
+                if low is None or high is None or pd.isna(value):
+                    values.append(None)
+                    continue
+                if high == low:
+                    y = (top + bottom) / 2
+                else:
+                    y = bottom - (float(value) - low) / (high - low) * (bottom - top)
+                values.append(
+                    {
+                        "index": index,
+                        "x": x_positions[index],
+                        "y": y,
+                        "is_forecast": records[index]["is_forecast"],
+                        "tier_key": records[index]["tier_key"],
+                    }
                 )
-                radius = 8 if selected else 5
-            else:
-                point_classes = f"lane-point lane-{lane_id}-point"
-                radius = 6 if selected else 4
-            if point["is_forecast"]:
-                point_classes += " forecast-point"
-            if selected:
-                point_classes += " is-selected"
-            points.append(
-                f'<circle class="{point_classes}" data-lane="{column}" '
-                f'data-index="{point["index"]}" cx="{point["x"]:.2f}" '
-                f'cy="{point["y"]:.2f}" r="{radius}"></circle>'
-            )
+
+            for previous, current in zip(values, values[1:]):
+                if previous is None or current is None:
+                    continue
+                forecast_segment = previous["is_forecast"] or current["is_forecast"]
+                line_classes = f"lane-series-line lane-{series_id}-line"
+                if forecast_segment:
+                    line_classes += " forecast-segment"
+                lane_markup.append(
+                    f'<path class="{line_classes}" data-lane="{column}" '
+                    f'data-start-index="{previous["index"]}" '
+                    f'data-end-index="{current["index"]}" '
+                    f'd="M{previous["x"]:.2f},{previous["y"]:.2f} '
+                    f'L{current["x"]:.2f},{current["y"]:.2f}"></path>'
+                )
+
+            for point in values:
+                if point is None:
+                    continue
+                selected = point["index"] == default_index
+                if series_id == "score":
+                    point_classes = (
+                        f'lane-point lane-score-point tier-{point["tier_key"]}'
+                    )
+                    radius = 8 if selected else 5
+                elif series_id in {"pm25", "pm10"}:
+                    point_classes = f"lane-point lane-{series_id}-point"
+                    radius = 3 if selected else 2
+                else:
+                    point_classes = f"lane-point lane-{series_id}-point"
+                    radius = 6 if selected else 4
+                if point["is_forecast"]:
+                    point_classes += " forecast-point"
+                if selected:
+                    point_classes += " is-selected"
+                points.append(
+                    f'<circle class="{point_classes}" data-lane="{column}" '
+                    f'data-index="{point["index"]}" cx="{point["x"]:.2f}" '
+                    f'cy="{point["y"]:.2f}" r="{radius}"></circle>'
+                )
 
     x_labels = []
     for index, (record, x) in enumerate(zip(records, x_positions)):
+        if record["month_label"]:
+            x_labels.append(
+                f'<text class="lane-x-month-label" data-index="{index}" '
+                f'x="{x:.2f}" y="{month_label_y}" text-anchor="middle">'
+                f'{escape(record["month_label"])}</text>'
+            )
         x_labels.append(
             f'<text class="lane-x-label" data-index="{index}" x="{x:.2f}" '
-            f'y="368" text-anchor="middle">{escape(record["short_label"])}</text>'
+            f'y="{day_label_y}" text-anchor="middle">'
+            f'{escape(record["day_label"])}</text>'
         )
 
     selected_x = x_positions[default_index]
     selection_line = (
         f'<line class="lane-selected-line" x1="{selected_x:.2f}" '
-        f'x2="{selected_x:.2f}" y1="8" y2="340"></line>'
+        f'x2="{selected_x:.2f}" y1="8" y2="{plot_bottom}"></line>'
     )
     for index, x in enumerate(x_positions):
         hit_columns.append(
             f'<rect class="lane-hit-column" data-index="{index}" '
             f'data-center="{x:.2f}" x="{plot_left + index * day_step:.2f}" '
-            f'y="8" width="{day_step:.2f}" height="332"></rect>'
+            f'y="8" width="{day_step:.2f}" height="{plot_bottom - 8}"></rect>'
         )
 
     tier_legend = "".join(
@@ -487,8 +618,24 @@ def _lane_chart(rows: pd.DataFrame, today) -> str:
         f"</span>{escape(label)}</span>"
         for tier, label in TIER_LABELS_HU.items()
     )
+    temperature_legend = (
+        '<span class="lane-legend-item"><span class="lane-legend-line '
+        'lane-temperature-max-line"></span>Max. hőmérséklet</span>'
+        '<span class="lane-legend-item"><span class="lane-legend-line '
+        'lane-temperature-min-line"></span>Min. hőmérséklet</span>'
+    )
+    air_quality_legend = (
+        '<span class="lane-legend-item"><span class="lane-legend-line '
+        'lane-pm25-line"></span>PM₂,₅</span>'
+        '<span class="lane-legend-item"><span class="lane-legend-line '
+        'lane-pm10-line"></span>PM₁₀</span>'
+        '<span class="lane-legend-item"><span class="lane-legend-line '
+        'lane-no2-line"></span>NO₂</span>'
+    )
     legend = (
         '<div class="lane-legend">'
+        + temperature_legend
+        + air_quality_legend
         + tier_legend
         + '<span class="lane-legend-item"><span class="lane-legend-ring"></span>'
         "üres karika = előrejelzés</span></div>"
@@ -580,6 +727,9 @@ def _lane_chart(rows: pd.DataFrame, today) -> str:
         'point.classList.toggle("is-selected",selected);'
         'if(point.classList.contains("lane-score-point"))'
         'point.setAttribute("r",selected?"8":"5");'
+        'else if(point.classList.contains("lane-pm25-point")||'
+        'point.classList.contains("lane-pm10-point"))'
+        'point.setAttribute("r",selected?"3":"2");'
         'else point.setAttribute("r",selected?"6":"4");'
         "});"
         "if(announce){"
@@ -701,51 +851,90 @@ def _table(rows: pd.DataFrame, today=None, monthly: bool = False) -> str:
 
 def _driver_stats(rows: pd.DataFrame) -> list[dict]:
     contribution_rows = [
-        compute_feature_contributions(row, RISK_WEIGHTS, FEATURE_RANGES)
-        for _, row in rows.iterrows()
+        (
+            date,
+            compute_feature_contributions(row, RISK_WEIGHTS, FEATURE_RANGES),
+        )
+        for date, row in rows.iterrows()
     ]
     stats = []
     for feature in DRIVER_FEATURES:
-        values = [item[feature] for item in contribution_rows if feature in item]
-        missing_pct = 100 * (1 - len(values) / len(rows)) if len(rows) else 100
+        values = [
+            (date, contributions[feature])
+            for date, contributions in contribution_rows
+            if feature in contributions
+        ]
+        peak_date, peak = (
+            max(values, key=lambda item: item[1]) if values else (None, 0)
+        )
         stats.append(
             {
                 "feature": feature,
-                "average": sum(values) / len(values) if values else 0,
-                "peak": max(values) if values else 0,
-                "missing_pct": missing_pct,
+                "average": (
+                    sum(value for _, value in values) / len(values)
+                    if values
+                    else 0
+                ),
+                "peak": peak,
+                "peak_date": peak_date,
             }
         )
     return stats
 
 
-def _drivers(rows: pd.DataFrame, paired: bool = False) -> str:
+def _drivers(rows: pd.DataFrame) -> str:
     stats = _driver_stats(rows)
-    scale = max((item["peak"] for item in stats), default=0) or 1
     rendered = []
     for item in stats:
         feature = item["feature"]
-        average_width = max(4, min(100, item["average"] / scale * 100))
-        peak_width = max(4, min(100, item["peak"] / scale * 100))
-        missing = item["missing_pct"]
-        if missing == 100:
-            value_text = "100% hiányzik"
+        average_width = max(0, min(100, item["average"] * 100))
+        peak_width = max(0, min(100, item["peak"] * 100))
+        if item["peak_date"] is None:
+            value_parts = ["Nincs adat", "Csúcs dátuma: —"]
         else:
-            value_text = f"átlag {item['average']:.1%} · hiány {missing:.0f}%"
+            value_parts = [
+                f"Átlag: {_number(item['average'], 3)} pont",
+                f"Csúcs: {_number(item['peak'], 3)} pont",
+                f"Csúcs dátuma: "
+                f"{_hu_date(item['peak_date'], include_year=True)}",
+            ]
+        value_markup = "".join(
+            f"<span>{escape(part)}</span>" for part in value_parts
+        )
         tracks = (
             '<div class="driver-pair">'
             f'<div class="driver-track"><div class="driver-fill {DRIVER_CSS[feature]}" style="width:{average_width:.1f}%"></div></div>'
             f'<div class="driver-track driver-peak"><div class="driver-fill {DRIVER_CSS[feature]}" style="width:{peak_width:.1f}%"></div></div>'
             "</div>"
-            if paired
-            else f'<div class="driver-track"><div class="driver-fill {DRIVER_CSS[feature]}" style="width:{average_width:.1f}%"></div></div>'
         )
         rendered.append(
             '<div class="driver-row">'
-            f"<strong>{escape(DRIVER_LABELS[feature])}</strong>{tracks}"
-            f'<span class="driver-value">{escape(value_text)}</span></div>'
+            '<div class="driver-label">'
+            f"<strong>{escape(DRIVER_LABELS[feature])}</strong>"
+            f'<span class="driver-weight">Pontszámsúly: '
+            f'{_number(RISK_WEIGHTS[feature] * 100, 1)}%</span></div>{tracks}'
+            f'<span class="driver-value">{value_markup}</span></div>'
         )
-    return '<div class="drivers">' + "".join(rendered) + "</div>"
+    legend = (
+        '<div class="driver-legend">'
+        '<span class="driver-legend-item"><span class="driver-legend-swatch">'
+        "</span>Átlag</span>"
+        '<span class="driver-legend-item"><span class="driver-legend-swatch '
+        'driver-peak-swatch"></span>Időszaki csúcs</span>'
+        + "</div>"
+    )
+    scale_note = (
+        '<p class="driver-scale-note">A sávhossz közvetlenül arányos a '
+        'pontszám-hozzájárulással: a teljes sáv 1,000 pontot jelent a 0–1-es '
+        'skálán. Az átlag csak az adott tényezővel rendelkező napokra '
+        'vonatkozik. A „Csúcs dátuma” a legnagyobb napi hozzájárulás első '
+        'előfordulása. A megjelenített pontszámsúly az alapmodell súlya; a '
+        'modell a rendelkezésre álló bemenetek súlyait naponta '
+        'újranormalizálja. Csak négy bemeneti tényező szerepel itt, ezért a '
+        'sávok nem adják ki a teljes pontszámot.'
+        "</p>"
+    )
+    return scale_note + legend + '<div class="drivers">' + "".join(rendered) + "</div>"
 
 
 def _card(label: str, value: str, note: str = "") -> str:
@@ -811,7 +1000,11 @@ def _daily_notes(rows: pd.DataFrame, today, forecast: pd.DataFrame) -> str:
     notes = [
         f"A mai { _score(today_row.get('risk_score')) } kockázati pontszám fő hajtóereje: "
         f"<strong>{escape(DRIVER_LABELS.get(feature, feature or 'nem meghatározható'))}</strong>"
-        + (f" ({contribution:.1%} pont-hozzájárulás)." if contribution is not None else ".")
+        + (
+            f" ({_number(contribution, 3)} pont-hozzájárulás)."
+            if contribution is not None
+            else "."
+        )
     ]
     if not forecast.empty and forecast["risk_score"].notna().any():
         peak_date = forecast["risk_score"].idxmax()
@@ -898,7 +1091,7 @@ def generate_daily_html_report(
         '<section class="panel"><h2>Részletes napi adatok</h2>'
         + _table(rows, today=today)
         + "</section>"
-        '<section class="panel"><h2>Kockázati hajtóerők</h2>'
+        '<section class="panel"><h2>Kockázati hajtóerők — átlag és csúcs</h2>'
         + _drivers(rows)
         + "</section>"
         '<section class="panel"><h2>Rövid összefoglaló</h2>'
@@ -1060,8 +1253,8 @@ def generate_monthly_html_report(
         '<section class="panel"><h2>Kiemelt események</h2>'
         + _monthly_events(rows)
         + "</section>"
-        '<section class="panel"><h2>Hajtóerők — átlag és csúcs</h2>'
-        + _drivers(rows, paired=True)
+        '<section class="panel"><h2>Kockázati hajtóerők — átlag és csúcs</h2>'
+        + _drivers(rows)
         + _wellbeing(monthly=True)
         + "</section>"
     )

@@ -23,6 +23,7 @@ sys.path.insert(0, str(SRC_DIR))
 from html_report import (  # noqa: E402
     _lane_chart,
     _daily_slice,
+    _drivers,
     main as html_report_main,
     generate_daily_html_report,
     generate_monthly_html_report,
@@ -48,9 +49,12 @@ def sample_frame() -> pd.DataFrame:
     frame = pd.DataFrame(
         {
             "temperature_2m_max": [30.0] * 37,
+            "temperature_2m_min": [18.0] * 37,
             "DTR": [10.0] * 34 + [14.0, 15.0, 16.0],
             "delta_P": [1.0] * 35 + [-4.0, 2.0],
             "dew_point_2m_mean": [12.0] * 37,
+            "precipitation_sum": [float(index % 5) for index in range(37)],
+            "windspeed_10m_max": [12.0 + index % 4 for index in range(37)],
             "pm2_5": [8.0] * 35 + [float("nan"), float("nan")],
             "pm10": [14.0] * 35 + [float("nan"), float("nan")],
             "no2": [18.0] * 35 + [float("nan"), float("nan")],
@@ -97,12 +101,18 @@ class HTMLReportTests(unittest.TestCase):
         self.assertIn("Levegőminőség hiányzik", html)
         self.assertIn("alsó becslések", html)
         self.assertIn("abszolút hőterhelést nem méri", html)
+        self.assertIn("Kockázati hajtóerők — átlag és csúcs", html)
+        self.assertIn("Időszaki csúcs", html)
+        self.assertEqual(html.count('<div class="driver-pair">'), 4)
         self.assertNotIn("GFZ Potsdam Kp", html)
         self.assertIn("Springfield &lt;test &amp; place&gt;", html)
         self.assertEqual(html.count('<tr class="'), 10)
         self.assertIn('class="lane-chart-svg"', html)
         self.assertNotIn("data-tooltip=", html)
-        self.assertIn("min-width: 600px", html)
+        self.assertIn(
+            ".lane-chart-svg { display: block; width: auto; min-width: 0; height: auto; }",
+            html,
+        )
         self.assertIn("height: 362px", html)
         self.assertIn("@media (min-width: 980px)", html)
         _HTMLSmokeParser().feed(html)
@@ -113,6 +123,10 @@ class HTMLReportTests(unittest.TestCase):
         frame.loc[dates[27:32], "risk_score"] = [0.1, 0.25, 0.35, 0.5, float("nan")]
         frame["risk_tier"] = frame["risk_score"].map(classify_risk_score)
         frame.loc[dates[30], "DTR"] = float("nan")
+        frame.loc[dates[32], "temperature_2m_min"] = float("nan")
+        frame.loc[dates[29], "pm2_5"] = float("nan")
+        frame.loc[dates[30], "pm10"] = float("nan")
+        frame.loc[dates[31], "no2"] = float("nan")
         frame["latitude"] = 47.123456
         frame["longitude"] = 19.123456
 
@@ -136,6 +150,44 @@ class HTMLReportTests(unittest.TestCase):
         records = json.loads(raw_json)
         self.assertEqual(len(records), 10)
         self.assertTrue(all(len(record["card_rows"]) == 9 for record in records))
+        expected_card_order = [
+            "Hőmérséklet max./min.",
+            "DTR",
+            "Légnyomás-változás",
+            "Harmatpont",
+            "Csapadék",
+            "Max. szélsebesség",
+            "PM₂,₅",
+            "PM₁₀",
+            "NO₂",
+        ]
+        self.assertTrue(
+            all(
+                [label for label, _ in record["card_rows"]] == expected_card_order
+                for record in records
+            )
+        )
+        lane_labels = re.findall(
+            r'<text class="lane-label" data-metric="[^"]+" '
+            r'x="8" y="[^"]+">(.*?)</text>',
+            html,
+        )
+        self.assertEqual(
+            [unescape(label) for label in lane_labels],
+            [
+                "Pontszám",
+                "Hőm. max/min (°C)",
+                "DTR (°C)",
+                "ΔP (hPa)",
+                "Harmatpont (°C)",
+                "Csapadék (mm)",
+                "Max. szél (km/h)",
+                "Légszennyezők (µg/m³)",
+            ],
+        )
+        self.assertIn(">PM₂,₅</span>", html)
+        self.assertIn(">PM₁₀</span>", html)
+        self.assertIn(">NO₂</span>", html)
         self.assertIn("pontszám", records[7]["status_text"])
         self.assertNotIn('hidden', re.search(r'<aside class="lane-card".*?</aside>', html).group())
         self.assertNotIn("— µg/m³", html)
@@ -148,18 +200,48 @@ class HTMLReportTests(unittest.TestCase):
         self.assertEqual(html.count('class="lane-hit-column"'), 10)
 
         labels = re.findall(
-            r'<text class="lane-x-label" data-index="(\d+)" x="([\d.]+)" '
-            r'y="368" text-anchor="middle">(.*?)</text>',
+            r'<text class="lane-x-label" data-index="(\d+)" '
+            r'x="([\d.]+)" y="(\d+)" text-anchor="middle">(.*?)</text>',
             html,
         )
-        self.assertEqual([int(index) for index, _, _ in labels], list(range(10)))
+        self.assertEqual([int(index) for index, _, _, _ in labels], list(range(10)))
         self.assertEqual(
-            [unescape(label) for _, _, label in labels],
-            [record["short_label"] for record in records],
+            [unescape(label) for _, _, _, label in labels],
+            [record["day_label"] for record in records],
         )
-        x_positions = [float(x) for _, x, _ in labels]
+        month_labels = re.findall(
+            r'<text class="lane-x-month-label" data-index="(\d+)" '
+            r'x="([\d.]+)" y="(\d+)" text-anchor="middle">(.*?)</text>',
+            html,
+        )
+        self.assertEqual(
+            [
+                (int(index), unescape(label))
+                for index, _, _, label in month_labels
+            ],
+            [
+                (index, record["month_label"])
+                for index, record in enumerate(records)
+                if record["month_label"]
+            ],
+        )
+        x_positions = [float(x) for _, x, _, _ in labels]
         steps = [right - left for left, right in zip(x_positions, x_positions[1:])]
         self.assertTrue(all(abs(step - steps[0]) < 0.02 for step in steps))
+        svg_geometry = re.search(
+            r'<svg class="lane-chart-svg" width="(\d+)" height="\d+" '
+            r'style="min-width:(\d+)px" viewBox="0 0 (\d+) (\d+)"',
+            html,
+        )
+        self.assertIsNotNone(svg_geometry)
+        render_width, min_width, view_width, _ = map(
+            int, svg_geometry.groups()
+        )
+        self.assertEqual(render_width, min_width)
+        rendered_steps = [step * render_width / view_width for step in steps]
+        self.assertGreaterEqual(min(rendered_steps), 28)
+        self.assertGreaterEqual(min(rendered_steps), 35)
+        self.assertLess(max(rendered_steps), 37)
 
         for tier in ("low", "moderate", "high", "very_high"):
             self.assertRegex(
@@ -173,6 +255,22 @@ class HTMLReportTests(unittest.TestCase):
         self.assertNotRegex(
             html,
             r'lane-point[^"]*forecast-point[^"]*fill:\s*var\(--accent\)',
+        )
+        self.assertIn(".lane-temperature-max-line { stroke: #B42318; }", html)
+        self.assertIn(
+            ".lane-temperature-max-line, .lane-temperature-min-line, "
+            ".lane-pm25-line, .lane-pm10-line { stroke-width: 1.4; }",
+            html,
+        )
+        self.assertIn(
+            ".lane-point.lane-pm25-point, .lane-point.lane-pm10-point "
+            "{ stroke-width: 1; }",
+            html,
+        )
+        self.assertIn(
+            ".lane-point.is-selected.lane-pm25-point, "
+            ".lane-point.is-selected.lane-pm10-point { stroke-width: 1.5; }",
+            html,
         )
 
         dtr_points = re.findall(
@@ -188,6 +286,109 @@ class HTMLReportTests(unittest.TestCase):
         )
         self.assertEqual(len(dtr_segments), 7)
         self.assertFalse(any("3" in (start, end) for start, end in dtr_segments))
+        chart_points = re.findall(
+            r'<circle class="[^"]+" data-lane="([^"]+)" '
+            r'data-index="(\d+)" cx="([\d.]+)"',
+            html,
+        )
+        point_lanes = {lane for lane, _, _ in chart_points}
+        self.assertEqual(
+            point_lanes,
+            {
+                "risk_score",
+                "temperature_2m_max",
+                "temperature_2m_min",
+                "DTR",
+                "delta_P",
+                "dew_point_2m_mean",
+                "precipitation_sum",
+                "windspeed_10m_max",
+                "pm2_5",
+                "pm10",
+                "no2",
+            },
+        )
+        centers = {
+            int(index): float(center)
+            for index, center in re.findall(
+                r'<rect class="lane-hit-column" data-index="(\d+)" '
+                r'data-center="([\d.]+)"',
+                html,
+            )
+        }
+        for _, index, x in chart_points:
+            self.assertAlmostEqual(float(x), centers[int(index)], places=2)
+
+        pollutant_y = {
+            lane: float(y)
+            for lane, y in re.findall(
+                r'<circle class="[^"]+" data-lane="(pm2_5|pm10|no2)" '
+                r'data-index="0" cx="[\d.]+" cy="([\d.]+)"',
+                html,
+            )
+        }
+        self.assertGreater(pollutant_y["pm2_5"], pollutant_y["pm10"])
+        self.assertGreater(pollutant_y["pm10"], pollutant_y["no2"])
+        for pollutant_series in ("pm25", "pm10"):
+            self.assertRegex(
+                html,
+                rf'<circle class="[^"]*lane-{pollutant_series}-point[^"]*" '
+                r'data-lane="[^"]+" data-index="0" cx="[\d.]+" '
+                r'cy="[\d.]+" r="2"></circle>',
+            )
+            self.assertRegex(
+                html,
+                rf'<circle class="[^"]*lane-{pollutant_series}-point[^"]*" '
+                r'data-lane="[^"]+" data-index="7" cx="[\d.]+" '
+                r'cy="[\d.]+" r="3"></circle>',
+            )
+        self.assertIn('point.setAttribute("r",selected?"3":"2");', html)
+
+        point_indices = {
+            lane: {int(index) for point_lane, index, _ in chart_points if point_lane == lane}
+            for lane in ("pm2_5", "pm10", "no2")
+        }
+        temperature_point_indices = {
+            lane: {
+                int(index)
+                for point_lane, index, _ in chart_points
+                if point_lane == lane
+            }
+            for lane in ("temperature_2m_max", "temperature_2m_min")
+        }
+        self.assertIn(5, temperature_point_indices["temperature_2m_max"])
+        self.assertNotIn(5, temperature_point_indices["temperature_2m_min"])
+        for lane, missing_index in (("pm2_5", 2), ("pm10", 3), ("no2", 4)):
+            self.assertNotIn(missing_index, point_indices[lane])
+            self.assertNotIn(8, point_indices[lane])
+            self.assertNotIn(9, point_indices[lane])
+            segments = re.findall(
+                rf'<path class="[^"]+" data-lane="{lane}" '
+                r'data-start-index="(\d+)" data-end-index="(\d+)"',
+                html,
+            )
+            self.assertFalse(
+                any(
+                    missing_index in (int(start), int(end))
+                    or int(start) >= 8
+                    or int(end) >= 8
+                    for start, end in segments
+                )
+            )
+        self.assertRegex(
+            html,
+            r'lane-temperature-max-point forecast-point',
+        )
+        self.assertRegex(
+            html,
+            r'lane-temperature-max-line forecast-segment',
+        )
+        self.assertRegex(html, r'lane-wind-point forecast-point')
+        self.assertRegex(html, r'lane-wind-line forecast-segment')
+        final_card_values = dict(records[-1]["card_rows"])
+        self.assertEqual(final_card_values["PM₂,₅"], "—")
+        self.assertEqual(final_card_values["PM₁₀"], "—")
+        self.assertEqual(final_card_values["NO₂"], "—")
         self.assertIn("Alsó becslés: PM és NO₂ hiányzik", records[-1]["note"])
 
         rows, _, _ = _daily_slice(frame.drop(columns=["latitude", "longitude"]))
@@ -226,9 +427,25 @@ class HTMLReportTests(unittest.TestCase):
         self.assertIn("PM₂,₅ 7 napos gördülő átlag", html)
         self.assertIn("DTR 30 napos trend", html)
         self.assertIn('class="lane-chart-svg"', html)
+        self.assertEqual(
+            html.count('class="lane-label" data-metric="air_quality"'),
+            1,
+        )
+        for pollutant in ("pm2_5", "pm10", "no2"):
+            points = re.findall(
+                rf'<circle class="[^"]+" data-lane="{pollutant}"',
+                html,
+            )
+            segments = re.findall(
+                rf'<path class="[^"]+" data-lane="{pollutant}"',
+                html,
+            )
+            self.assertEqual(len(points), 30)
+            self.assertEqual(len(segments), 29)
         self.assertIn("pointermove", html)
         self.assertIn("Kiemelt események", html)
-        self.assertIn("driver-pair", html)
+        self.assertIn("Kockázati hajtóerők — átlag és csúcs", html)
+        self.assertEqual(html.count('<div class="driver-pair">'), 4)
         self.assertIn("Mérsékelt+ napok", html)
         self.assertEqual(html.count('class="lane-hit-column"'), 30)
 
@@ -246,12 +463,61 @@ class HTMLReportTests(unittest.TestCase):
             int(re.search(r'data-selected-index="(\d+)"', html).group(1)),
             29,
         )
-        min_width = re.search(
-            r'class="lane-chart-svg"[^>]*style="min-width:(\d+)px"',
+        svg_geometry = re.search(
+            r'<svg class="lane-chart-svg" width="(\d+)" height="\d+" '
+            r'style="min-width:(\d+)px" viewBox="0 0 (\d+) (\d+)"',
             html,
         )
-        self.assertIsNotNone(min_width)
-        self.assertGreater(int(min_width.group(1)), 600)
+        self.assertIsNotNone(svg_geometry)
+        render_width, min_width, view_width, _ = map(
+            int, svg_geometry.groups()
+        )
+        self.assertEqual(render_width, min_width)
+        chart_centers = [
+            float(center)
+            for center in re.findall(
+                r'<rect class="lane-hit-column" data-index="\d+" '
+                r'data-center="([\d.]+)"',
+                html,
+            )
+        ]
+        chart_steps = [
+            right - left
+            for left, right in zip(chart_centers, chart_centers[1:])
+        ]
+        self.assertTrue(
+            all(abs(step - chart_steps[0]) < 0.02 for step in chart_steps)
+        )
+        rendered_steps = [
+            step * render_width / view_width for step in chart_steps
+        ]
+        self.assertGreaterEqual(min(rendered_steps), 28)
+        self.assertGreaterEqual(min(rendered_steps), 31)
+        self.assertLess(max(rendered_steps), 33)
+
+        month_labels = re.findall(
+            r'<text class="lane-x-month-label" data-index="(\d+)" '
+            r'x="([\d.]+)" y="(\d+)" text-anchor="middle">(.*?)</text>',
+            html,
+        )
+        self.assertEqual(
+            [
+                (int(index), unescape(label))
+                for index, _, _, label in month_labels
+            ],
+            [
+                (index, record["month_label"])
+                for index, record in enumerate(records)
+                if record["month_label"]
+            ],
+        )
+        for index, x, _, _ in month_labels:
+            self.assertAlmostEqual(
+                float(x),
+                chart_centers[int(index)],
+                places=2,
+            )
+        self.assertEqual(len(chart_centers), 30)
         _HTMLSmokeParser().feed(html)
 
     def test_report_rejects_missing_required_columns(self):
@@ -310,6 +576,70 @@ class HTMLReportTests(unittest.TestCase):
         score = compute_row_score(row, RISK_WEIGHTS, FEATURE_RANGES)
         self.assertAlmostEqual(sum(contributions.values()), score)
         self.assertEqual(max(contributions, key=contributions.get), "DTR")
+
+    def test_driver_bars_show_weights_and_max_contribution_date(self):
+        rows = pd.DataFrame(
+            [
+                {
+                    "delta_P": 10.0,
+                    "DTR": 12.5,
+                    "dew_point_2m_mean": 5.0,
+                    "pm2_5": 37.5,
+                    "no2": 50.0,
+                    "pm10": 75.0,
+                },
+                {
+                    "delta_P": 20.0,
+                    "DTR": 25.0,
+                    "dew_point_2m_mean": -20.0,
+                    "pm2_5": 75.0,
+                    "no2": 100.0,
+                    "pm10": 150.0,
+                },
+            ],
+            index=pd.to_datetime(["2026-08-01", "2026-08-02"]),
+        )
+
+        driver_html = _drivers(rows)
+        self.assertIn(
+            'class="driver-fill driver-dp" style="width:20.8%"',
+            driver_html,
+        )
+        self.assertIn(
+            'class="driver-fill driver-dp" style="width:27.8%"',
+            driver_html,
+        )
+        self.assertIn("Átlag: 0,208 pont", driver_html)
+        self.assertIn("Pontszámsúly: 27,8%", driver_html)
+        self.assertIn("Csúcs: 0,278 pont", driver_html)
+        self.assertIn("Csúcs dátuma: 2026. aug. 2.", driver_html)
+        self.assertIn("teljes sáv 1,000 pont", driver_html)
+        self.assertIn("Időszaki csúcs", driver_html)
+        self.assertNotIn("Hiány:", driver_html)
+
+        partial_rows = rows.copy()
+        partial_rows.loc[pd.Timestamp("2026-08-02"), "DTR"] = float("nan")
+        partial_html = _drivers(partial_rows)
+        self.assertIn(
+            'class="driver-fill driver-dtr" style="width:11.1%"',
+            partial_html,
+        )
+        self.assertIn("Csúcs dátuma: 2026. aug. 1.", partial_html)
+
+        zero_rows = rows.copy()
+        zero_rows["DTR"] = 0.0
+        zero_html = _drivers(zero_rows)
+        self.assertIn(
+            'class="driver-fill driver-dtr" style="width:0.0%"',
+            zero_html,
+        )
+        self.assertIn("Csúcs dátuma: 2026. aug. 1.", zero_html)
+
+        no_data_rows = rows.copy()
+        no_data_rows["DTR"] = float("nan")
+        no_data_html = _drivers(no_data_rows)
+        self.assertIn("Nincs adat", no_data_html)
+        self.assertIn("Csúcs dátuma: —", no_data_html)
 
 
 if __name__ == "__main__":
